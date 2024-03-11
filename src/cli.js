@@ -1,26 +1,14 @@
-import arg from "arg";
 import { createProject } from "./main";
+import { program } from "commander";
 
-// relay-cli --name my-project-name
-function parseArgumentsIntoOptions(rawArgs) {
-  const args = arg(
-    {
-      "--name": String,
+program
+  .command("new")
+  .description("Create a new project")
+  .option("-n, --name <name>", "Name of the project")
+  .action(async (options) => {
+    await createProject(options);
+  });
 
-      // Aliases
-      "-n": "--name",
-    },
-    {
-      argv: rawArgs.slice(2),
-    }
-  );
+program.parse(process.argv);
 
-  return {
-    name: args["--name"] || false,
-  };
-}
-
-export async function cli(args) {
-  let options = parseArgumentsIntoOptions(args);
-  await createProject(options);
-}
+export async function cli() {}
