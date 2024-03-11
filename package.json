@@ -4,25 +4,25 @@
     "description": "CLI to start relay",
     "main": "src/index.js",
     "bin": {
-      "relay-cli": "bin/create-project"
+        "relay-cli": "bin/create-project"
     },
     "publishConfig": {
-      "access": "public"
+        "access": "public"
     },
     "scripts": {
-      "test": "echo \"Error: no test specified\" && exit 1"
+        "test": "echo \"Error: no test specified\" && exit 1"
     },
     "keywords": [
-      "cli",
-      "relay-cli"
+        "cli",
+        "relay-cli"
     ],
     "author": "",
     "license": "ISC",
     "dependencies": {
-      "arg": "^5.0.2",
-      "esm": "^3.2.25",
-      "fs": "^0.0.1-security",
-      "ncp": "^2.0.0"
+        "arg": "^5.0.2",
+        "commander": "^12.0.0",
+        "esm": "^3.2.25",
+        "fs": "^0.0.1-security",
+        "ncp": "^2.0.0"
     }
-  }
-  
+}

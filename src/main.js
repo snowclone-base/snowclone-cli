@@ -16,7 +16,9 @@ async function copyTemplateFiles(options) {
 export async function createProject(options) {
   options = {
     ...options,
-    targetDirectory: path.join(process.cwd(), options.name) || process.cwd(),
+    targetDirectory: options.name
+      ? path.join(process.cwd(), options.name)
+      : process.cwd(),
   };
 
   const currentFileUrl = import.meta.url;
