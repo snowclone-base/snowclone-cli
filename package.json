@@ -3,6 +3,7 @@
     "version": "1.0.0",
     "description": "CLI to start relay",
     "main": "src/index.js",
+    "type": "module",
     "bin": {
         "relay-cli": "bin/create-project"
     },
@@ -23,6 +24,8 @@
         "commander": "^12.0.0",
         "esm": "^3.2.25",
         "fs": "^0.0.1-security",
-        "ncp": "^2.0.0"
+        "inquirer": "^9.2.16",
+        "ncp": "^2.0.0",
+        "relay-cli": "^0.1.0"
     }
 }
