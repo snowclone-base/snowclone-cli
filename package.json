@@ -1,11 +1,11 @@
 {
-    "name": "relay-cli-2401",
+    "name": "snowclone-cli-2401",
     "version": "1.0.0",
-    "description": "CLI to start relay",
+    "description": "CLI to start snowclone",
     "main": "src/index.js",
     "type": "module",
     "bin": {
-        "relay-cli": "bin/create-project"
+        "snowclone": "bin/create-project"
     },
     "publishConfig": {
         "access": "public"
@@ -15,7 +15,7 @@
     },
     "keywords": [
         "cli",
-        "relay-cli"
+        "snowclone"
     ],
     "author": "",
     "license": "ISC",
@@ -26,6 +26,6 @@
         "fs": "^0.0.1-security",
         "inquirer": "^9.2.16",
         "ncp": "^2.0.0",
-        "relay-cli": "^0.1.0"
+        "path": "^0.12.7"
     }
 }

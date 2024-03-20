@@ -1,4 +1,4 @@
-import { createProject, deployProject, removeProject } from "./main.js";
+import { createProject, deployProject, initializeAdmin } from "./main.js";
 import { program } from "commander";
 import inquirer from "inquirer";
 
@@ -9,6 +9,13 @@ program
   .action(async (options) => {
     await createProject(options);
   });
+
+program
+  .command("init")
+  .description("Initialize your AWS with the necessary admin infrastructure")
+  .action(() => {
+    initializeAdmin();
+  })
 
 program
   .command("test")
@@ -41,18 +48,6 @@ program
     const configurations = await inquirer.prompt(prompts);
     console.log("configurations: ", configurations);
     deployProject(configurations);
-  })
-
-program
-  .command("remove")
-  .description("Remove a project from ECS Fargate")
-  .action(async () => {
-    const projectName = await inquirer.prompt({
-      type: "input",
-      name: "name",
-      message: "Specify the name of the project you would like to remove"
-    })
-    removeProject(projectName)
   })
 
 program.parse(process.argv);
