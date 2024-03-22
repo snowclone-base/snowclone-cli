@@ -11,7 +11,13 @@ provider "aws" {
   region = "us-east-1"
 }
 
-resource "aws_s3_bucket" "example" {}
+variable "bucket_name" {
+  type = string
+}
+
+resource "aws_s3_bucket" "bucket" {
+  bucket = var.bucket_name
+}
 
 resource "aws_dynamodb_table" "db" {
   name         = "backend_info"
@@ -24,3 +30,4 @@ resource "aws_dynamodb_table" "db" {
 
   table_class = "STANDARD_INFREQUENT_ACCESS"
 }
+

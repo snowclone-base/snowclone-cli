@@ -13,19 +13,13 @@ program
 program
   .command("init")
   .description("Initialize your AWS with the necessary admin infrastructure")
-  .action(() => {
-    initializeAdmin();
-  })
-
-program
-  .command("test")
   .action(async () => {
-    const answer = await inquirer.prompt({
+    const configs = await inquirer.prompt({
       type: "input",
-      name: "answer",
-      message: "enter something",
+      name: "region",
+      message: "Specify your desired AWS region",
     })
-    console.log(answer.answer);
+    initializeAdmin(configs);
   })
 
 program

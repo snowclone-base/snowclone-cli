@@ -4,6 +4,8 @@ import path from "path";
 import { promisify } from "util";
 import { execSync } from "child_process";
 import { fileURLToPath } from 'url';
+import crypto from "crypto";
+import { saveS3InfoToDynamo, saveTFStateToS3 } from "./awsHelpers.js"
 
 const access = promisify(fs.access);
 const copy = promisify(ncp);
@@ -16,23 +18,26 @@ async function copyTemplateFiles(options) {
   });
 }
 
-
-
-export function initializeAdmin() {
+// deal w/ configs
+export function initializeAdmin(configs) {
+  const s3BucketName = crypto.randomBytes(12).toString("hex");
   const terraformAdminDir = path.join(__dirname, "terraform", "admin");
   execSync("terraform init", { cwd: terraformAdminDir });
   console.log("Initialized admin!");
-  execSync("terraform apply -auto-approve", { cwd: terraformAdminDir });
+  execSync(`terraform apply -auto-approve -var="bucket_name=${s3BucketName}"`, { cwd: terraformAdminDir });
   console.log("Admin stack applied!")
+  saveS3InfoToDynamo(s3BucketName);
+  let tfJSON = execSync("terraform show -json terraform.tfstate", { cwd: terraformAdminDir });
 }
 
-export function deployProject(configurations) {
+export function deployProject(configs) {
   try {
     const terraformMainDir = path.join(__dirname, "terraform");
     execSync("terraform init", { cwd: terraformMainDir});
     console.log("Initialized!");
-    const tfOutput = execSync(`terraform apply -auto-approve -var="desired_region=${configurations.region}" -var="project_name=${configurations.name}"`, { encoding: "utf-8", cwd: terraformMainDir});
+    execSync(`terraform apply -auto-approve -var="desired_region=${configs.region}" -var="project_name=${configs.name}"`, { encoding: "utf-8", cwd: terraformMainDir});
     console.log("Stack has been deployed!");
+    saveTFStateToS3();
   } catch (error) {
     console.error('Error executing Terraform apply:', error.message);
     process.exit(1);
