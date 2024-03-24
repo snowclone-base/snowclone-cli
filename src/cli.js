@@ -1,4 +1,4 @@
-import { createProject, deployProject, initializeAdmin } from "./main.js";
+import { createProject, deployProject, initializeAdmin, uploadSchema } from "./main.js";
 import { program } from "commander";
 import inquirer from "inquirer";
 
@@ -42,7 +42,28 @@ program
     const configurations = await inquirer.prompt(prompts);
     console.log("configurations: ", configurations);
     deployProject(configurations);
-  })
+  });
+
+  program
+    .command("import")
+    .description("Import a schema file to a backend")
+    .action(async () => {
+      const prompts = [
+        {
+          type: "input",
+          name: "name",
+          message: "Specify the project name",
+        },
+        {
+          type: "input",
+          name: "filePath",
+          message: "enter the path to the file you want to upload",
+        },
+      ]
+      const configs = await inquirer.prompt(prompts)
+      
+      uploadSchema(configs.name)
+    })
 
 program.parse(process.argv);
 

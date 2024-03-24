@@ -5,7 +5,7 @@ import { promisify } from "util";
 import { execSync } from "child_process";
 import { fileURLToPath } from 'url';
 import crypto from "crypto";
-import { saveS3InfoToDynamo, saveTFStateToS3 } from "./awsHelpers.js"
+import { saveS3InfoToDynamo, saveTFStateToS3, addEndpointToDynamo, getLBEndpoint } from "./awsHelpers.js"
 
 const access = promisify(fs.access);
 const copy = promisify(ncp);
@@ -18,7 +18,7 @@ async function copyTemplateFiles(options) {
   });
 }
 
-// deal w/ configs
+// deal w/ configs, change to try/ catch block
 export function initializeAdmin(configs) {
   const s3BucketName = crypto.randomBytes(12).toString("hex");
   const terraformAdminDir = path.join(__dirname, "terraform", "admin");
@@ -35,13 +35,21 @@ export function deployProject(configs) {
     const terraformMainDir = path.join(__dirname, "terraform");
     execSync("terraform init", { cwd: terraformMainDir});
     console.log("Initialized!");
-    execSync(`terraform apply -auto-approve -var="desired_region=${configs.region}" -var="project_name=${configs.name}"`, { encoding: "utf-8", cwd: terraformMainDir});
+    execSync(`terraform apply -auto-approve`, { encoding: "utf-8", cwd: terraformMainDir});
     console.log("Stack has been deployed!");
-    saveTFStateToS3();
+    let tfJSON = execSync("terraform show -json terraform.tfstate", { cwd: terraformMainDir});
+    let backendEndpoint = JSON.parse(tfJSON.toString()).values.outputs.app_url.value;
+    saveTFStateToS3(configs.name);
+    addEndpointToDynamo(configs.name, backendEndpoint);
   } catch (error) {
     console.error('Error executing Terraform apply:', error.message);
     process.exit(1);
   }
+}
+
+export function uploadSchema(schemaFile, projectName) {
+  const LBEndpoint = getLBEndpoint(projectName);
+  execSync(`curl -F 'file=@${schemaFile}' ${LBEndpoint}/schema`);
 }
 
 // creates a new directory in .
