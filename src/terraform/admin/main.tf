@@ -11,14 +11,6 @@ provider "aws" {
   region = "us-west-2"
 }
 
-variable "bucket_name" {
-  type = string
-}
-
-resource "aws_s3_bucket" "bucket" {
-  bucket = var.bucket_name
-}
-
 resource "aws_dynamodb_table" "db" {
   name         = "backend_info"
   billing_mode = "PAY_PER_REQUEST"
@@ -31,3 +23,6 @@ resource "aws_dynamodb_table" "db" {
   table_class = "STANDARD_INFREQUENT_ACCESS"
 }
 
+terraform {
+    backend "s3" {}
+}

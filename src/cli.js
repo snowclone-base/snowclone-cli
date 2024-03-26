@@ -40,7 +40,6 @@ program
     ]
 
     const configurations = await inquirer.prompt(prompts);
-    console.log("configurations: ", configurations);
     deployProject(configurations);
   });
 
@@ -62,7 +61,7 @@ program
       ]
       const configs = await inquirer.prompt(prompts)
       
-      uploadSchema(configs.name)
+      uploadSchema(configs.filePath, configs.name)
     })
 
 program.parse(process.argv);

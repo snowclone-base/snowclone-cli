@@ -1,8 +1,7 @@
 
-import { DynamoDBClient, GetItemCommand } from "@aws-sdk/client-dynamodb"
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb"
 import { ScanCommand, PutCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import fs from "fs";
+import { CreateBucketCommand, S3Client } from "@aws-sdk/client-s3";
 import { fileURLToPath } from 'url';
 import path from "path";
 import crypto from "crypto";
@@ -13,7 +12,21 @@ const __dirname = path.dirname(__filename);
 const dynamoDbClient = new DynamoDBClient({region: "us-west-2"});
 const docClient = DynamoDBDocumentClient.from(dynamoDbClient);
 
-const getS3Info = async () => {
+export const createS3 = async (bucketName) => {
+  const client = new S3Client({ region: "us-west-2"});
+  const command = new CreateBucketCommand({
+    Bucket: bucketName,
+  });
+
+  try {
+    const { Location } = await client.send(command);
+    return Location;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+export const getS3Info = async () => {
   const command = new ScanCommand({
     FilterExpression: "#purpose = :bucket_name",
     ExpressionAttributeNames: { "#purpose": "purpose" },
@@ -37,20 +50,6 @@ export const getLBEndpoint = async (projectName) => {
   return response.Items[0].endpoint
 }
 
-export const saveS3InfoToDynamo = async (bucketName) => {
-  const command = new PutCommand({
-    TableName: "backend_info",
-    Item: {
-      id: crypto.randomBytes(12).toString("hex"),
-      purpose: "bucket_name",
-      name: bucketName
-    }
-  })
-  const response = await docClient.send(command);
-  console.log(response);
-  return response;
-}
-
 export const addEndpointToDynamo = async (projectName, backendEndpoint) => {
   const command = new PutCommand({
     TableName: "backend_info",
@@ -65,21 +64,3 @@ export const addEndpointToDynamo = async (projectName, backendEndpoint) => {
   return response;
 }
 
-export const saveTFStateToS3 = async (projectName) => {
-  const terraformDir = path.join(__dirname, "terraform");
-  const client = new S3Client({region: "us-west-2"})
-  const S3BucketName = await getS3Info();
-  const command = new PutObjectCommand({
-    Bucket: S3BucketName,
-    Key: `${projectName}/terraform.tfstate`,
-    Body: fs.readFileSync(`${terraformDir}/terraform.tfstate`),
-    ContentType: "application/json"
-  })
-
-  try {
-    const response = await client.send(command);
-    console.log("response: ", response);
-  } catch (err) {
-    console.error(err);
-  }
-}
