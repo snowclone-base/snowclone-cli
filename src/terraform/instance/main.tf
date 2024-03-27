@@ -2,23 +2,27 @@ provider "aws" {
   region = "us-west-2"
 }
 
+variable "project-name" {
+  type = string
+}
+
 # create cloud map namespace
-resource "aws_service_discovery_http_namespace" "snoke" {
-  name        = "snoke"
-  description = "snoke"
+resource "aws_service_discovery_http_namespace" "namespace" {
+  name        = var.project-name
+  description = "namespace"
 }
 
 # provision cluster & capacity providers
-resource "aws_ecs_cluster" "snoke" {
-  name = "snoke"
+resource "aws_ecs_cluster" "cluster" {
+  name = var.project-name
 
   service_connect_defaults {
-    namespace = aws_service_discovery_http_namespace.snoke.arn
+    namespace = aws_service_discovery_http_namespace.namespace.arn
   }
 }
 
-resource "aws_ecs_cluster_capacity_providers" "snoke" {
-  cluster_name = aws_ecs_cluster.snoke.name
+resource "aws_ecs_cluster_capacity_providers" "providers" {
+  cluster_name = aws_ecs_cluster.cluster.name
 
   capacity_providers = ["FARGATE"]
 
@@ -31,13 +35,13 @@ resource "aws_ecs_cluster_capacity_providers" "snoke" {
 
 # Create a CloudWatch Logs group
 resource "aws_cloudwatch_log_group" "ecs_logs" {
-  name              = "/ecs/snoke"
+  name              = "/ecs/${var.project-name}"
   retention_in_days = 30 # Adjust retention policy as needed
 }
 
 # provision security groups
 resource "aws_security_group" "allow_all" {
-  name        = "lb_sg"
+  name        = "${var.project-name}_lb_sg"
   description = "testing out ingress and egress in tf "
   vpc_id      = aws_default_vpc.default_vpc.id
   tags = {
@@ -63,8 +67,8 @@ resource "aws_vpc_security_group_egress_rule" "allow_all" {
 }
 
 # provision ALB
-resource "aws_lb" "snoke-alb" {
-  name               = "snoke-alb"
+resource "aws_lb" "alb" {
+  name               = "${var.project-name}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.allow_all.id] # need to make SGs
@@ -73,7 +77,7 @@ resource "aws_lb" "snoke-alb" {
 
 # set up target groups
 resource "aws_lb_target_group" "tg-postgrest" {
-  name        = "tg-postgrest"
+  name        = "${var.project-name}-tg-postgrest"
   port        = "3000"
   protocol    = "HTTP"
   vpc_id      = aws_default_vpc.default_vpc.id
@@ -81,7 +85,7 @@ resource "aws_lb_target_group" "tg-postgrest" {
 }
 
 resource "aws_lb_target_group" "tg-eventserver" {
-  name        = "tg-eventserver"
+  name        = "${var.project-name}-tg-eventserver"
   port        = "8080"
   protocol    = "HTTP"
   vpc_id      = aws_default_vpc.default_vpc.id
@@ -89,7 +93,7 @@ resource "aws_lb_target_group" "tg-eventserver" {
 }
 
 resource "aws_lb_target_group" "tg-schema-server" {
-  name        = "tg-schema-server"
+  name        = "${var.project-name}-tg-schema-server"
   port        = "5175"
   protocol    = "HTTP"
   vpc_id      = aws_default_vpc.default_vpc.id
@@ -109,8 +113,8 @@ resource "aws_lb_target_group" "tg-schema-server" {
 }
 
 # set up ALB listener
-resource "aws_lb_listener" "snoke-alb-listener" {
-  load_balancer_arn = aws_lb.snoke-alb.arn
+resource "aws_lb_listener" "alb-listener" {
+  load_balancer_arn = aws_lb.alb.arn
   port              = "80"
   protocol          = "HTTP"
 
@@ -122,7 +126,7 @@ resource "aws_lb_listener" "snoke-alb-listener" {
 
 # set up routes
 resource "aws_lb_listener_rule" "realtime" {
-  listener_arn = aws_lb_listener.snoke-alb-listener.arn
+  listener_arn = aws_lb_listener.alb-listener.arn
   priority     = 100
 
   action {
@@ -138,7 +142,7 @@ resource "aws_lb_listener_rule" "realtime" {
 }
 
 resource "aws_lb_listener_rule" "schema-upload" {
-  listener_arn = aws_lb_listener.snoke-alb-listener.arn
+  listener_arn = aws_lb_listener.alb-listener.arn
   priority     = 101
 
   action {
@@ -215,14 +219,14 @@ resource "aws_ecs_task_definition" "postgres" {
 # provision postgres service
 resource "aws_ecs_service" "pg-service" {
   name            = "pg-service"
-  cluster         = aws_ecs_cluster.snoke.id
+  cluster         = aws_ecs_cluster.cluster.id
   task_definition = aws_ecs_task_definition.postgres.arn
   desired_count   = 1
   launch_type     = "FARGATE"
 
   service_connect_configuration {
     enabled   = true
-    namespace = "snoke"
+    namespace = var.project-name
 
     service {
       client_alias {
@@ -360,7 +364,7 @@ resource "aws_ecs_task_definition" "api" {
 # provision api service
 resource "aws_ecs_service" "api-service" {
   name            = "api-service"
-  cluster         = aws_ecs_cluster.snoke.id
+  cluster         = aws_ecs_cluster.cluster.id
   task_definition = aws_ecs_task_definition.api.arn
   desired_count   = 1
   launch_type     = "FARGATE"
@@ -385,7 +389,7 @@ resource "aws_ecs_service" "api-service" {
 
   service_connect_configuration {
     enabled   = true
-    namespace = "snoke"
+    namespace = var.project-name
   }
 
   network_configuration {
@@ -410,7 +414,7 @@ resource "aws_default_subnet" "default_subnet_b" {
 }
 
 output "app_url" {
-  value = aws_lb.snoke-alb.dns_name
+  value = aws_lb.alb.dns_name
 }
 
 terraform {

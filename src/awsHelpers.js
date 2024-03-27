@@ -2,6 +2,7 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb"
 import { ScanCommand, PutCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { CreateBucketCommand, S3Client } from "@aws-sdk/client-s3";
+import { EC2Client, DescribeRegionsCommand } from "@aws-sdk/client-ec2"
 import { fileURLToPath } from 'url';
 import path from "path";
 import crypto from "crypto";
@@ -26,18 +27,6 @@ export const createS3 = async (bucketName) => {
   }
 }
 
-export const getS3Info = async () => {
-  const command = new ScanCommand({
-    FilterExpression: "#purpose = :bucket_name",
-    ExpressionAttributeNames: { "#purpose": "purpose" },
-    ExpressionAttributeValues: {":bucket_name": "bucket_name"},
-    TableName: "backend_info",
-  });
-
-  const response = await docClient.send(command)
-  return response.Items[0].name;
-}
-
 export const getLBEndpoint = async (projectName) => {
   const command = new ScanCommand({
     TableName: "backend_info",
@@ -48,6 +37,15 @@ export const getLBEndpoint = async (projectName) => {
 
   const response = await docClient.send(command)
   return response.Items[0].endpoint
+}
+
+export const getAllProjects = async () => {
+  const command = new ScanCommand({
+    TableName: "backend_info",
+  });
+
+  const response = await docClient.send(command);
+  return response.Items
 }
 
 export const addEndpointToDynamo = async (projectName, backendEndpoint) => {
@@ -62,5 +60,18 @@ export const addEndpointToDynamo = async (projectName, backendEndpoint) => {
   const response = await docClient.send(command);
   console.log(response);
   return response;
+}
+
+export const getAWSRegions = async () => {
+  try {
+    const ec2Client = new EC2Client({ region: "us-west-2" });
+    const command = new DescribeRegionsCommand({});
+    const data = await ec2Client.send(command);
+    const regions = data.Regions.map(region => region.RegionName);
+    return regions;
+  } catch (err) {
+    console.error('Error describing regions:', err);
+    throw err;
+  }
 }
 

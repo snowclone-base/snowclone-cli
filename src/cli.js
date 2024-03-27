@@ -1,4 +1,4 @@
-import { createProject, deployProject, initializeAdmin, uploadSchema } from "./main.js";
+import { createProject, deployProject, listProjects, initializeAdmin, uploadSchema } from "./main.js";
 import { program } from "commander";
 import inquirer from "inquirer";
 
@@ -62,6 +62,13 @@ program
       const configs = await inquirer.prompt(prompts)
       
       uploadSchema(configs.filePath, configs.name)
+    })
+
+program
+    .command("list")
+    .description("List all active projects")
+    .action(async () => {
+      listProjects();
     })
 
 program.parse(process.argv);
