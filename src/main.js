@@ -1,12 +1,13 @@
+
 import fs from "fs";
 import ncp from "ncp";
 import path from "path";
 import os from "os"
 import { promisify } from "util";
-import { execSync } from "child_process";
+import { execSync, exec } from "child_process";
 import { fileURLToPath } from 'url';
 import crypto from "crypto";
-import { addEndpointToDynamo, getLBEndpoint, createS3 } from "./awsHelpers.js"
+import { addEndpointToDynamo, getLBEndpoint, createS3, getAllProjects, getAWSRegions } from "./awsHelpers.js"
 
 const access = promisify(fs.access);
 const copy = promisify(ncp);
@@ -21,6 +22,15 @@ async function copyTemplateFiles(options) {
   });
 }
 
+function initializeTF(bucket, name, directory) {
+  execSync(`terraform init -reconfigure \
+            -backend-config="bucket=${bucket}" \
+            -backend-config="region=us-west-2" \
+            -backend-config="key=${name}/terraform.tfstate"`, { cwd: directory});
+
+  console.log("Initialized!");
+}
+
 // save bucket name to users home directory in snowclone folder
 function saveS3Info(bucketName) {
   const data = {bucketName}
@@ -32,6 +42,11 @@ function saveS3Info(bucketName) {
       console.error(err);
     }
   })
+}
+
+async function isValidRegion(region) {
+  const regions = await getAWSRegions();
+  return regions.includes(region);
 }
 
 // get info from file we saved
@@ -57,32 +72,48 @@ export async function initializeAdmin(configs) {
 }
 
 // provision backend, save endpoint to dynamo
-export  async function deployProject(configs) {
-  const terraformMainDir = path.join(__dirname, "terraform");
+export async function deployProject(configs) {
+  const terraformMainDir = path.join(__dirname, "terraform/instance");
   const s3BucketName = getS3Info();
-  console.log("S3 name: ", s3BucketName); 
+  let validRegion = await isValidRegion(configs.region);
+
+  if (!validRegion) {
+    console.log("Please enter a valid region")
+    return
+  }
 
   try {
-    execSync(`terraform init -migrate-state \
-            -backend-config="bucket=${s3BucketName}" \
-            -backend-config="region=us-west-2" \
-            -backend-config="key=${configs.name}/terraform.tfstate"`, { cwd: terraformMainDir});
+
+    const test = execSync(`terraform init -reconfigure \
+    -backend-config="bucket=${s3BucketName}" \
+    -backend-config="region=us-west-2" \
+    -backend-config="key=${configs.name}/terraform.tfstate"`, { cwd: terraformMainDir});
+
     console.log("Initialized!");
-    execSync(`terraform apply -auto-approve`, { encoding: "utf-8", cwd: terraformMainDir});
+    execSync(`terraform workspace select -or-create ${configs.name}`);
+    console.log("workspace initialized!");
+    execSync(`terraform apply -auto-approve  -var="project-name=${configs.name}"`, { encoding: "utf-8", cwd: terraformMainDir});
     console.log("Stack has been deployed!");
     const tfOutputs = execSync("terraform output -json", { cwd: terraformMainDir }).toString();
     const projectEndpoint = JSON.parse(tfOutputs).app_url.value;
     addEndpointToDynamo(configs.name, projectEndpoint);
   } catch (error) {
-    console.error('Error executing Terraform apply:', error.message);
+    console.error('Error executing Terraform apply:', error);
     process.exit(1);
   }
 }
 
-
 export async function uploadSchema(schemaFile, projectName) {
   const LBEndpoint = await getLBEndpoint(projectName);
-  execSync(`curl -F 'file=@${schemaFile}' ${LBEndpoint}/schema`);
+  console.log(LBEndpoint);
+  execSync(`curl -H "Authorization: Bearer helo" -F 'file=@${schemaFile}' ${LBEndpoint}/schema`);
+}
+
+export async function listProjects() {
+  const projects = await getAllProjects();
+  const projectNames = projects.map(proj => proj.name);
+  console.log("Active Projects: ");
+  projectNames.forEach(proj => console.log(proj));
 }
 
 // creates a new directory in .
