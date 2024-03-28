@@ -1,7 +1,8 @@
 
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb"
+import { DynamoDBClient, DeleteItemCommand } from "@aws-sdk/client-dynamodb"
 import { ScanCommand, PutCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { CreateBucketCommand, S3Client } from "@aws-sdk/client-s3";
+import { CreateBucketCommand, DeleteObjectsCommand, DeleteBucketCommand,
+         ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
 import { EC2Client, DescribeRegionsCommand } from "@aws-sdk/client-ec2"
 import { fileURLToPath } from 'url';
 import path from "path";
@@ -12,9 +13,36 @@ const __dirname = path.dirname(__filename);
 
 const dynamoDbClient = new DynamoDBClient({region: "us-west-2"});
 const docClient = DynamoDBDocumentClient.from(dynamoDbClient);
+const client = new S3Client({ region: "us-west-2"});
+const ec2Client = new EC2Client({ region: "us-west-2" });
+
+const getS3Objects = async (bucket) => {
+  const command = new ListObjectsV2Command({
+    Bucket: bucket,
+    MaxKeys: 1,
+  });
+
+  try {
+    let isTruncated = true;
+
+    console.log("Your bucket contains the following objects:\n");
+    let contents = "";
+
+    while (isTruncated) {
+      const { Contents, IsTruncated, NextContinuationToken } =
+        await client.send(command);
+      const contentsList = Contents.map((c) => ` • ${c.Key}`).join("\n");
+      contents += contentsList + "\n";
+      isTruncated = IsTruncated;
+      command.input.ContinuationToken = NextContinuationToken;
+    }
+    console.log(contents);
+  } catch (err) {
+    console.error(err);
+  }
+}
 
 export const createS3 = async (bucketName) => {
-  const client = new S3Client({ region: "us-west-2"});
   const command = new CreateBucketCommand({
     Bucket: bucketName,
   });
@@ -27,7 +55,7 @@ export const createS3 = async (bucketName) => {
   }
 }
 
-export const getLBEndpoint = async (projectName) => {
+export const getProjectFromDynamo = async (projectName) => {
   const command = new ScanCommand({
     TableName: "backend_info",
     FilterExpression: `#name = :projectName`,
@@ -36,7 +64,7 @@ export const getLBEndpoint = async (projectName) => {
   });
 
   const response = await docClient.send(command)
-  return response.Items[0].endpoint
+  return response.Items[0]
 }
 
 export const getAllProjects = async () => {
@@ -48,7 +76,7 @@ export const getAllProjects = async () => {
   return response.Items
 }
 
-export const addEndpointToDynamo = async (projectName, backendEndpoint) => {
+export const addProjectToDynamo = async (projectName, backendEndpoint) => {
   const command = new PutCommand({
     TableName: "backend_info",
     Item: {
@@ -58,13 +86,58 @@ export const addEndpointToDynamo = async (projectName, backendEndpoint) => {
     }
   })
   const response = await docClient.send(command);
-  console.log(response);
   return response;
 }
 
+export const removeProjectFromDynamo = async (name) => {
+  const project = await getProjectFromDynamo(name);
+
+  try {
+    const command = new DeleteItemCommand({
+      TableName: "backend_info",
+      Key: {
+        "id": { "S" : project.id }
+      }
+    });
+
+    const data = await dynamoDbClient.send(command);
+    console.log('Item deleted successfully:', data);
+} catch (err) {
+  console.error(err);
+  }
+}
+
+export const emptyS3 = async (bucket) => {
+  try {
+    const listObjectsResponse = await client.send(new ListObjectsV2Command({ Bucket: bucket }));
+    const objectsToDelete = listObjectsResponse.Contents.map(obj => ({ Key: obj.Key }));
+    console.log("listObjectsResponse: ", listObjectsResponse)
+    console.log("Objectstodelete: ", objectsToDelete);
+    await client.send(new DeleteObjectsCommand({
+      Bucket: bucket,
+      Delete: { Objects: objectsToDelete },
+    }));
+  } catch (error) {
+    console.error('Error deleting objects from S3:', error);
+  }
+}
+
+export const removeS3 = async (bucket) => {
+  const command = new DeleteBucketCommand({
+    Bucket: bucket,
+  });
+
+  try {
+    const response = await client.send(command);
+    console.log(response);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+
 export const getAWSRegions = async () => {
   try {
-    const ec2Client = new EC2Client({ region: "us-west-2" });
     const command = new DescribeRegionsCommand({});
     const data = await ec2Client.send(command);
     const regions = data.Regions.map(region => region.RegionName);

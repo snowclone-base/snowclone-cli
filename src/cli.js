@@ -1,9 +1,4 @@
-import {
-  deployProject,
-  listProjects,
-  initializeAdmin,
-  uploadSchema,
-} from "./main.js";
+import { createProject, deployProject, listProjects, initializeAdmin, uploadSchema, removeProject, tearDownAWS } from "./main.js";
 import { program } from "commander";
 import inquirer from "inquirer";
 
@@ -90,6 +85,29 @@ program
   .action(async () => {
     listProjects();
   });
+
+program
+    .command("remove")
+    .description("Remove a project")
+    .action(async () => {
+      const prompts = [
+        {
+          type: "input",
+          name: "name",
+          message: "Specify the project name",
+        }
+      ]
+      const configs = await inquirer.prompt(prompts)
+      
+      removeProject(configs);
+    })
+
+  program
+    .command("destroy")
+    .description("Remove admin infrastructure from AWS")
+    .action(async () => {
+      tearDownAWS();
+    })
 
 program.parse(process.argv);
 
