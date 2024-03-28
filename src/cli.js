@@ -1,4 +1,11 @@
-import { createProject, deployProject, listProjects, initializeAdmin, uploadSchema, removeProject, tearDownAWS } from "./main.js";
+import {
+  deployProject,
+  listProjects,
+  initializeAdmin,
+  uploadSchema,
+  removeProject,
+  tearDownAWS,
+} from "./main.js";
 import { program } from "commander";
 import inquirer from "inquirer";
 
@@ -87,27 +94,30 @@ program
   });
 
 program
-    .command("remove")
-    .description("Remove a project")
-    .action(async () => {
-      const prompts = [
-        {
-          type: "input",
-          name: "name",
-          message: "Specify the project name",
-        }
-      ]
-      const configs = await inquirer.prompt(prompts)
-      
-      removeProject(configs);
-    })
+  .command("remove")
+  .description("Remove a project")
+  .option("-n, --name <name>", "Specify the project name")
+  .action(async (options) => {
+    const configs = {
+      name:
+        options.name ||
+        (
+          await inquirer.prompt({
+            type: "input",
+            name: "name",
+            message: "Specify the project name",
+          })
+        ).name,
+    };
+    removeProject(configs);
+  });
 
-  program
-    .command("destroy")
-    .description("Remove admin infrastructure from AWS")
-    .action(async () => {
-      tearDownAWS();
-    })
+program
+  .command("melt")
+  .description("Remove admin infrastructure from AWS")
+  .action(async () => {
+    tearDownAWS();
+  });
 
 program.parse(process.argv);
 
