@@ -1,13 +1,18 @@
-
 import fs from "fs";
 import ncp from "ncp";
 import path from "path";
-import os from "os"
+import os from "os";
 import { promisify } from "util";
 import { execSync, exec } from "child_process";
-import { fileURLToPath } from 'url';
+import { fileURLToPath } from "url";
 import crypto from "crypto";
-import { addEndpointToDynamo, getLBEndpoint, createS3, getAllProjects, getAWSRegions } from "./awsHelpers.js"
+import {
+  addEndpointToDynamo,
+  getLBEndpoint,
+  createS3,
+  getAllProjects,
+  getAWSRegions,
+} from "./awsHelpers.js";
 
 const access = promisify(fs.access);
 const copy = promisify(ncp);
@@ -23,25 +28,28 @@ async function copyTemplateFiles(options) {
 }
 
 function initializeTF(bucket, name, directory) {
-  execSync(`terraform init -reconfigure \
+  execSync(
+    `terraform init -reconfigure \
             -backend-config="bucket=${bucket}" \
             -backend-config="region=us-west-2" \
-            -backend-config="key=${name}/terraform.tfstate"`, { cwd: directory});
+            -backend-config="key=${name}/terraform.tfstate"`,
+    { cwd: directory }
+  );
 
   console.log("Initialized!");
 }
 
 // save bucket name to users home directory in snowclone folder
 function saveS3Info(bucketName) {
-  const data = {bucketName}
+  const data = { bucketName };
   fs.mkdirSync(appDir, { recursive: true });
-  const fileName = path.join(appDir, "S3.json")
+  const fileName = path.join(appDir, "S3.json");
 
   fs.writeFile(fileName, JSON.stringify(data), (err) => {
     if (err) {
       console.error(err);
     }
-  })
+  });
 }
 
 async function isValidRegion(region) {
@@ -51,8 +59,8 @@ async function isValidRegion(region) {
 
 // get info from file we saved
 function getS3Info() {
-  const s3File = path.join(appDir, "S3.json")
-  const data = fs.readFileSync(s3File, "utf8")
+  const s3File = path.join(appDir, "S3.json");
+  const data = fs.readFileSync(s3File, "utf8");
   return JSON.parse(data).bucketName;
 }
 
@@ -61,13 +69,16 @@ export async function initializeAdmin(configs) {
   const s3BucketName = "snowclone-" + crypto.randomBytes(6).toString("hex");
   const s3Bucket = await createS3(s3BucketName);
   const terraformAdminDir = path.join(__dirname, "terraform", "admin");
-  execSync(`terraform init -reconfigure \
+  execSync(
+    `terraform init -reconfigure \
   -backend-config="bucket=${s3BucketName}" \
   -backend-config="region=us-west-2" \
-  -backend-config="key=admin/terraform.tfstate"`, { cwd: terraformAdminDir});
+  -backend-config="key=admin/terraform.tfstate"`,
+    { cwd: terraformAdminDir }
+  );
   console.log("Initialized admin!");
   execSync(`terraform apply -auto-approve`, { cwd: terraformAdminDir });
-  console.log("Admin stack applied!")
+  console.log("Admin stack applied!");
   saveS3Info(s3BucketName);
 }
 
@@ -78,27 +89,34 @@ export async function deployProject(configs) {
   let validRegion = await isValidRegion(configs.region);
 
   if (!validRegion) {
-    console.log("Please enter a valid region")
-    return
+    console.log("Please enter a valid region");
+    return;
   }
 
   try {
-
-    const test = execSync(`terraform init -reconfigure \
+    const test = execSync(
+      `terraform init -reconfigure \
     -backend-config="bucket=${s3BucketName}" \
     -backend-config="region=us-west-2" \
-    -backend-config="key=${configs.name}/terraform.tfstate"`, { cwd: terraformMainDir});
+    -backend-config="key=${configs.name}/terraform.tfstate"`,
+      { cwd: terraformMainDir }
+    );
 
     console.log("Initialized!");
     execSync(`terraform workspace select -or-create ${configs.name}`);
     console.log("workspace initialized!");
-    execSync(`terraform apply -auto-approve  -var="project-name=${configs.name}"`, { encoding: "utf-8", cwd: terraformMainDir});
+    execSync(
+      `terraform apply -auto-approve  -var="project-name=${configs.name}"`,
+      { encoding: "utf-8", cwd: terraformMainDir }
+    );
     console.log("Stack has been deployed!");
-    const tfOutputs = execSync("terraform output -json", { cwd: terraformMainDir }).toString();
+    const tfOutputs = execSync("terraform output -json", {
+      cwd: terraformMainDir,
+    }).toString();
     const projectEndpoint = JSON.parse(tfOutputs).app_url.value;
     addEndpointToDynamo(configs.name, projectEndpoint);
   } catch (error) {
-    console.error('Error executing Terraform apply:', error);
+    console.error("Error executing Terraform apply:", error);
     process.exit(1);
   }
 }
@@ -106,42 +124,14 @@ export async function deployProject(configs) {
 export async function uploadSchema(schemaFile, projectName) {
   const LBEndpoint = await getLBEndpoint(projectName);
   console.log(LBEndpoint);
-  execSync(`curl -H "Authorization: Bearer helo" -F 'file=@${schemaFile}' ${LBEndpoint}/schema`);
+  execSync(
+    `curl -H "Authorization: Bearer helo" -F 'file=@${schemaFile}' ${LBEndpoint}/schema`
+  );
 }
 
 export async function listProjects() {
   const projects = await getAllProjects();
-  const projectNames = projects.map(proj => proj.name);
+  const projectNames = projects.map((proj) => proj.name);
   console.log("Active Projects: ");
-  projectNames.forEach(proj => console.log(proj));
-}
-
-// creates a new directory in .
-export async function createProject(options) {
-  options = {
-    ...options,
-    targetDirectory: options.name
-      ? path.join(process.cwd(), options.name)
-      : process.cwd(),
-  }; 
-
-  const currentFileUrl = import.meta.url;
-  const templateDir = path.resolve(
-    new URL(currentFileUrl).pathname,
-    "../../relay-instance-template"
-  );
-  options.templateDirectory = templateDir;
-
-  try {
-    await access(templateDir, fs.constants.R_OK);
-  } catch (e) {
-    console.error(e);
-    process.exit(1);
-  }
-
-  console.log("Copy project files");
-  await copyTemplateFiles(options);
-
-  console.log("Project ready");
-  return true;
+  projectNames.forEach((proj) => console.log(proj));
 }

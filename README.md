@@ -1,10 +1,48 @@
-Welcome to the Relay CLI! 
+# Snowclone CLI
 
-To start working on this project, 
+## Prerequisites
+
+- Have [Terraform](https://developer.hashicorp.com/terraform/install) installed
+- Set your AWS credentials as environment variables from a terminal:
+
+```
+export AWS_ACCESS_KEY_ID=your_access_key_id
+export AWS_SECRET_ACCESS_KEY=your_secret_access_key
+```
+
+## Installation
+
+To install the Snowclone CLI:
+
+- clone this repository
 - run `npm install`
-- run `npm link` to establish a symlink (may need to run `sudo` here) so you can test the CLI locally
+- run `npm link` to establish a symlink (may need to run `sudo`)
 
-Currently, the commands available are as follows
-- `relay-cli --name "my-project"` will create a new directory in the current working directory called `my-project` and copy the `relay-instance-template` into it
-    - view the instance in action by navigating into `my-project` and running `docker compose up`
-- running `relay-cli` without any options will copy `relay-instance-template` into the current working directory (not recommended)
+## Usage
+
+### `snowclone init`
+
+Initialize your AWS with the necessary admin infrastructure. </br></br>
+Prompts:
+
+- AWS region
+
+### `snowclone deploy`
+
+Deploy a new backend stack to ECS Fargate. </br></br>
+Prompts:
+
+- Project name
+- AWS region
+
+### `snowclone import`
+
+Import a schema file to a backend. </br></br>
+Prompts:
+
+- Project name
+- File path
+
+### `snowclone list`
+
+List all active projects.
