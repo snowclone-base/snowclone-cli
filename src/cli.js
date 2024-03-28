@@ -81,9 +81,9 @@ program
           })
         ).filePath,
     };
+
     uploadSchema(configs.filePath, configs.name);
   });
-
 program
   .command("list")
   .description("List all active projects")
