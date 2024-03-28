@@ -3,73 +3,88 @@ import { program } from "commander";
 import inquirer from "inquirer";
 
 program
-  .command("new")
-  .description("Create a new project")
-  .option("-n, --name <name>", "Name of the project")
-  .action(async (options) => {
-    await createProject(options);
-  });
-
-program
   .command("init")
   .description("Initialize your AWS with the necessary admin infrastructure")
-  .action(async () => {
-    const configs = await inquirer.prompt({
-      type: "input",
-      name: "region",
-      message: "Specify your desired AWS region",
-    })
-    initializeAdmin();
-  })
+  .option("-r, --region <region>", "Specify the AWS region")
+  .action(async (options) => {
+    const configs = {
+      region:
+        options.region ||
+        (
+          await inquirer.prompt({
+            type: "input",
+            name: "region",
+            message: "Specify your desired AWS region",
+          })
+        ).region,
+    };
+    initializeAdmin(configs);
+  });
 
 program
   .command("deploy")
   .description("Deploy stack to ECS Fargate")
-  .action(async () => {
-    const prompts = [
-      {
-        type: "input",
-        name: "name",
-        message: "Specify the project name",
-      },
-      {
-        type: "input",
-        name: "region",
-        message: "Specify the AWS region"
-      }
-    ]
-
-    const configurations = await inquirer.prompt(prompts);
-    deployProject(configurations);
+  .option("-n, --name <name>", "Specify the project name")
+  .option("-r, --region <region>", "Specify the AWS region")
+  .action(async (options) => {
+    const configs = {
+      name:
+        options.name ||
+        (
+          await inquirer.prompt({
+            type: "input",
+            name: "name",
+            message: "Specify the project name",
+          })
+        ).name,
+      region:
+        options.region ||
+        (
+          await inquirer.prompt({
+            type: "input",
+            name: "region",
+            message: "Specify the AWS region",
+          })
+        ).region,
+    };
+    deployProject(configs);
   });
 
-  program
-    .command("import")
-    .description("Import a schema file to a backend")
-    .action(async () => {
-      const prompts = [
-        {
-          type: "input",
-          name: "name",
-          message: "Specify the project name",
-        },
-        {
-          type: "input",
-          name: "filePath",
-          message: "enter the path to the file you want to upload",
-        },
-      ]
-      const configs = await inquirer.prompt(prompts)
-      
-      uploadSchema(configs.filePath, configs.name)
-    })
-
 program
-    .command("list")
-    .description("List all active projects")
-    .action(async () => {
-      listProjects();
-    })
+  .command("import")
+  .description("Import a schema file to a backend")
+  .option("-n, --name <name>", "Specify the project name")
+  .option("-f, --filePath <filePath>", "Specify the path to the schema file")
+  .action(async (options) => {
+    const configs = {
+      name:
+        options.name ||
+        (
+          await inquirer.prompt({
+            type: "input",
+            name: "name",
+            message: "Specify the project name",
+          })
+        ).name,
+      filePath:
+        options.filePath ||
+        (
+          await inquirer.prompt({
+            type: "input",
+            name: "filePath",
+            message: "Specify the path to the schema file",
+          })
+        ).filePath,
+    };
+
+    uploadSchema(configs.filePath, configs.name);
+  });
+program
+  .command("list")
+  .description("List all active projects")
+  .action(async () => {
+    listProjects();
+  });
 
 program
     .command("remove")
