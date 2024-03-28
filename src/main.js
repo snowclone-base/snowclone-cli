@@ -4,10 +4,11 @@ import ncp from "ncp";
 import path from "path";
 import os from "os"
 import { promisify } from "util";
-import { execSync, exec } from "child_process";
+import { execSync } from "child_process";
 import { fileURLToPath } from 'url';
 import crypto from "crypto";
-import { addEndpointToDynamo, getLBEndpoint, createS3, getAllProjects, getAWSRegions } from "./awsHelpers.js"
+import { addProjectToDynamo, getProjectFromDynamo, removeProjectFromDynamo,
+         createS3, getAllProjects, getAWSRegions, emptyS3, removeS3 } from "./awsHelpers.js"
 
 const access = promisify(fs.access);
 const copy = promisify(ncp);
@@ -15,6 +16,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const homeDir = os.homedir();
 const appDir = path.join(homeDir, "snowclone");
+const terraformMainDir = path.join(__dirname, "terraform/instance");
+const terraformAdminDir = path.join(__dirname, "terraform/admin");
 
 async function copyTemplateFiles(options) {
   return copy(options.templateDirectory, options.targetDirectory, {
@@ -22,14 +25,6 @@ async function copyTemplateFiles(options) {
   });
 }
 
-function initializeTF(bucket, name, directory) {
-  execSync(`terraform init -reconfigure \
-            -backend-config="bucket=${bucket}" \
-            -backend-config="region=us-west-2" \
-            -backend-config="key=${name}/terraform.tfstate"`, { cwd: directory});
-
-  console.log("Initialized!");
-}
 
 // save bucket name to users home directory in snowclone folder
 function saveS3Info(bucketName) {
@@ -41,6 +36,14 @@ function saveS3Info(bucketName) {
     if (err) {
       console.error(err);
     }
+  })
+}
+
+function removeLocalFile() {
+  fs.unlink(appDir, (err) => {
+    if (err) {
+      console.error(err)
+    } 
   })
 }
 
@@ -57,10 +60,9 @@ function getS3Info() {
 }
 
 // create S3 bucket, create admin infra and save state to the bucket. (deal w/ configs, change to try/ catch block later)
-export async function initializeAdmin(configs) {
+export async function initializeAdmin() {
   const s3BucketName = "snowclone-" + crypto.randomBytes(6).toString("hex");
-  const s3Bucket = await createS3(s3BucketName);
-  const terraformAdminDir = path.join(__dirname, "terraform", "admin");
+  await createS3(s3BucketName);
   execSync(`terraform init -reconfigure \
   -backend-config="bucket=${s3BucketName}" \
   -backend-config="region=us-west-2" \
@@ -73,9 +75,8 @@ export async function initializeAdmin(configs) {
 
 // provision backend, save endpoint to dynamo
 export async function deployProject(configs) {
-  const terraformMainDir = path.join(__dirname, "terraform/instance");
-  const s3BucketName = getS3Info();
   let validRegion = await isValidRegion(configs.region);
+  const s3BucketName = getS3Info();
 
   if (!validRegion) {
     console.log("Please enter a valid region")
@@ -83,8 +84,7 @@ export async function deployProject(configs) {
   }
 
   try {
-
-    const test = execSync(`terraform init -reconfigure \
+    execSync(`terraform init -reconfigure \
     -backend-config="bucket=${s3BucketName}" \
     -backend-config="region=us-west-2" \
     -backend-config="key=${configs.name}/terraform.tfstate"`, { cwd: terraformMainDir});
@@ -96,7 +96,7 @@ export async function deployProject(configs) {
     console.log("Stack has been deployed!");
     const tfOutputs = execSync("terraform output -json", { cwd: terraformMainDir }).toString();
     const projectEndpoint = JSON.parse(tfOutputs).app_url.value;
-    addEndpointToDynamo(configs.name, projectEndpoint);
+    addProjectToDynamo(configs.name, projectEndpoint);
   } catch (error) {
     console.error('Error executing Terraform apply:', error);
     process.exit(1);
@@ -104,9 +104,14 @@ export async function deployProject(configs) {
 }
 
 export async function uploadSchema(schemaFile, projectName) {
-  const LBEndpoint = await getLBEndpoint(projectName);
-  console.log(LBEndpoint);
-  execSync(`curl -H "Authorization: Bearer helo" -F 'file=@${schemaFile}' ${LBEndpoint}/schema`);
+  try {
+    const project = await getProjectFromDynamo(projectName);
+    const endpoint = project.endpoint;
+    execSync(`curl -H "Authorization: Bearer helo" -F 'file=@${schemaFile}' ${endpoint}/schema`);
+    console.log("Schema imported successfully!")
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 export async function listProjects() {
@@ -114,6 +119,40 @@ export async function listProjects() {
   const projectNames = projects.map(proj => proj.name);
   console.log("Active Projects: ");
   projectNames.forEach(proj => console.log(proj));
+}
+
+export function removeProject(configs) {
+  const s3BucketName = getS3Info();
+  execSync("terraform workspace select default", { cwd: terraformMainDir });
+  execSync(`terraform init -reconfigure \
+  -backend-config="bucket=${s3BucketName}" \
+  -backend-config="region=us-west-2" \
+  -backend-config="key=${configs.name}/terraform.tfstate"`, { cwd: terraformMainDir });
+  execSync(`terraform destroy -auto-approve -var="project-name=${configs.name}"`);
+  removeProjectFromDynamo(configs.name);
+}
+
+export async function tearDownAWS() {
+  const s3BucketName = getS3Info();
+  const activeProjects = await getAllProjects();
+  activeProjects.forEach(proj => {
+    console.log("removing: ", proj)
+    removeProject(proj)
+  });
+
+  try {
+    execSync(`terraform init -reconfigure \
+    -backend-config="bucket=${s3BucketName}" \
+    -backend-config="region=us-west-2" \
+    -backend-config="key=admin/terraform.tfstate"`, { cwd: terraformAdminDir});
+    execSync("terraform destroy -auto-approve", { cwd: terraformAdminDir});
+    await emptyS3(s3BucketName);
+    await removeS3(s3BucketName);
+    removeLocalFile();
+  } catch (err) {
+    console.error(err)
+  }
+
 }
 
 // creates a new directory in .
