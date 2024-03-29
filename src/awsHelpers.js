@@ -63,7 +63,8 @@ export const addProjectToDynamo = async (projectName, backendEndpoint, region) =
     Item: {
       id: crypto.randomBytes(12).toString("hex"),
       name: projectName,
-      endpoint: backendEndpoint
+      endpoint: backendEndpoint,
+      region: region,
     }
   })
   const response = await docClient.send(command);

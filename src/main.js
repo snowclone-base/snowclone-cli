@@ -84,7 +84,7 @@ export async function deployProject(configs) {
     execSync(`terraform init -reconfigure \
     -backend-config="bucket=${bucketName}" \
     -backend-config="region=${region}" \
-    -backend-config="key=${configs.name}/terraform.tfstate"`,
+    -backend-config="key=terraform.tfstate"`,
       { cwd: terraformMainDir }
     );
 
@@ -128,19 +128,26 @@ export async function listProjects() {
   projectNames.forEach(proj => console.log(proj));
 }
 
-export function removeProject(configs) {
+export async function removeProject(configs) {
   const { bucketName, region } = getS3Info();
-  const projectInfo = getProjectFromDynamo(configs.name, region)
+  const projectInfo = await getProjectFromDynamo(configs.name, region);
+  const domainName = projectInfo.endpoint.split(".").slice(1).join(".");
 
-  execSync("terraform workspace select default", { cwd: terraformMainDir });
-  execSync(`terraform init -reconfigure \
+  const test = execSync(`terraform init -reconfigure \
   -backend-config="bucket=${bucketName}" \
   -backend-config="region=${region}" \
-  -backend-config="key=${configs.name}/terraform.tfstate"`, { cwd: terraformMainDir });
-  execSync(`terraform destroy -auto-approve -var="project-name=${configs.name}" \ 
-  -var="region=${projectInfo.region}}"`, { cwd: terraformMainDir});
+  -backend-config="key=terraform.tfstate"`, { cwd: terraformMainDir });
+  execSync(`terraform workspace select ${configs.name}`, { cwd: terraformMainDir });
+  console.log(test.toString())
+  const test2 = execSync(`terraform destroy -auto-approve \
+  -var="project_name=${configs.name}" \
+  -var="region=${region}" \
+  -var="domain_name=${domainName}"`,
+  { cwd: terraformMainDir});
+  console.log(test2.toString());
   removeProjectFromDynamo(configs.name, region);
 }
+
 
 export async function tearDownAWS() {
   const { bucketName, region } = getS3Info();

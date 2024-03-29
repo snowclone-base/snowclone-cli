@@ -87,7 +87,7 @@ resource "aws_cloudwatch_log_group" "ecs_logs" {
 
 # provision security groups
 resource "aws_security_group" "allow_all" {
-  name        = "lb_sg"
+  name        = "${var.project_name}_lb_sg"
   description = "testing out ingress and egress in tf "
   vpc_id      = aws_default_vpc.default_vpc.id
   tags = {
@@ -174,7 +174,7 @@ resource "aws_route53_record" "alb_record" {
 
 # set up target groups
 resource "aws_lb_target_group" "tg-postgrest" {
-  name        = "tg-postgrest"
+  name        = "${var.project_name}-tg-postgrest"
   port        = "3000"
   protocol    = "HTTP"
   vpc_id      = aws_default_vpc.default_vpc.id
@@ -193,7 +193,7 @@ resource "aws_lb_target_group" "tg-postgrest" {
 }
 
 resource "aws_lb_target_group" "tg-eventserver" {
-  name        = "tg-eventserver"
+  name        = "${var.project_name}-tg-eventserver"
   port        = "8080"
   protocol    = "HTTP"
   vpc_id      = aws_default_vpc.default_vpc.id
@@ -201,7 +201,7 @@ resource "aws_lb_target_group" "tg-eventserver" {
 }
 
 resource "aws_lb_target_group" "tg-schema-server" {
-  name        = "tg-schema-server"
+  name        = "${var.project_name}-tg-schema-server"
   port        = "5175"
   protocol    = "HTTP"
   vpc_id      = aws_default_vpc.default_vpc.id
