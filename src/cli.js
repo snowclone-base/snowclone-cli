@@ -33,6 +33,7 @@ program
   .description("Deploy stack to ECS Fargate")
   .option("-n, --name <name>", "Specify the project name")
   .option("-r, --region <region>", "Specify the AWS region")
+  .option("-d, --domain <domain>", "Specify the project's domain name")
   .action(async (options) => {
     const configs = {
       name:
@@ -53,6 +54,15 @@ program
             message: "Specify the AWS region",
           })
         ).region,
+      domain:
+        options.domain ||
+        (
+          await inquirer.prompt({
+            type: "input",
+            name: "domain",
+            message: "Specify the project's domain name",
+          })
+        ).domain,
     };
     deployProject(configs);
   });
@@ -116,7 +126,22 @@ program
   .command("melt")
   .description("Remove admin infrastructure from AWS")
   .action(async () => {
-    tearDownAWS();
+    console.log(
+      "Warning: This action is irreversible and will destroy all backends and remove the snowclone admin infrastructure from AWS"
+    );
+
+    const answer = await inquirer.prompt([
+      {
+        type: "input",
+        name: "confirmation",
+        message: 'To proceed, type "yes":',
+      },
+    ]);
+    if (answer.confirmation.toLowerCase() === "yes") {
+      tearDownAWS();
+    } else {
+      console.log("Operation aborted.");
+    }
   });
 
 program.parse(process.argv);

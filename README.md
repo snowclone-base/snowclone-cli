@@ -40,9 +40,10 @@ Deploy a new backend stack to ECS Fargate. </br>
 FLAGS
   -n, --name: The name of the project
   -r, --region: The AWS region
+  -d, --domain: The project's domain name
 
 EXAMPLE
-  snowclone deploy -n snowcones -r us-west-1
+  snowclone deploy -n snowcones -r us-west-1 -d snowcones.com
 ```
 
 ### `snowclone import`
@@ -76,4 +77,4 @@ EXAMPLE
 
 ### `snowclone melt`
 
-Remove data for all active projects and tear down admin infrastructure from AWS.
+Remove data for all active projects and tear down snowclone's admin infrastructure from AWS. Note: this operation is irreversable. You will be prompted for confirmation before `melt` commences.
