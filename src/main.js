@@ -4,10 +4,18 @@ import path from "path";
 import os from "os";
 import { promisify } from "util";
 import { execSync } from "child_process";
-import { fileURLToPath } from 'url';
+import { fileURLToPath } from "url";
 import crypto from "crypto";
-import { addProjectToDynamo, getProjectFromDynamo, removeProjectFromDynamo,
-         createS3, getAllProjects, getAWSRegions, emptyS3, removeS3 } from "./awsHelpers.js"
+import {
+  addProjectToDynamo,
+  getProjectFromDynamo,
+  removeProjectFromDynamo,
+  createS3,
+  getAllProjects,
+  getAWSRegions,
+  emptyS3,
+  removeS3,
+} from "./awsHelpers.js";
 
 const access = promisify(fs.access);
 const copy = promisify(ncp);
@@ -40,9 +48,9 @@ function saveS3Info(bucketName) {
 function removeLocalFile() {
   fs.unlink(appDir, (err) => {
     if (err) {
-      console.error(err)
-    } 
-  })
+      console.error(err);
+    }
+  });
 }
 
 async function isValidRegion(region) {
@@ -62,7 +70,8 @@ export async function initializeAdmin() {
   const s3BucketName = "snowclone-" + crypto.randomBytes(6).toString("hex");
 
   await createS3(s3BucketName);
-  execSync(`terraform init -reconfigure \
+  execSync(
+    `terraform init -reconfigure \
 
   -backend-config="bucket=${s3BucketName}" \
   -backend-config="region=us-west-2" \
@@ -86,7 +95,8 @@ export async function deployProject(configs) {
   }
 
   try {
-    execSync(`terraform init -reconfigure \
+    execSync(
+      `terraform init -reconfigure \
     -backend-config="bucket=${s3BucketName}" \
     -backend-config="region=us-west-2" \
     -backend-config="key=${configs.name}/terraform.tfstate"`,
@@ -116,8 +126,10 @@ export async function uploadSchema(schemaFile, projectName) {
   try {
     const project = await getProjectFromDynamo(projectName);
     const endpoint = project.endpoint;
-    execSync(`curl -H "Authorization: Bearer helo" -F 'file=@${schemaFile}' ${endpoint}/schema`);
-    console.log("Schema imported successfully!")
+    execSync(
+      `curl -H "Authorization: Bearer helo" -F 'file=@${schemaFile}' ${endpoint}/schema`
+    );
+    console.log("Schema imported successfully!");
   } catch (err) {
     console.error(err);
   }
@@ -127,41 +139,46 @@ export async function listProjects() {
   const projects = await getAllProjects();
   const projectNames = projects.map((proj) => proj.name);
   console.log("Active Projects: ");
-  projectNames.forEach(proj => console.log(proj));
+  projectNames.forEach((proj) => console.log(proj));
 }
 
 export function removeProject(configs) {
   const s3BucketName = getS3Info();
   execSync("terraform workspace select default", { cwd: terraformMainDir });
-  execSync(`terraform init -reconfigure \
+  execSync(
+    `terraform init -reconfigure \
   -backend-config="bucket=${s3BucketName}" \
   -backend-config="region=us-west-2" \
-  -backend-config="key=${configs.name}/terraform.tfstate"`, { cwd: terraformMainDir });
-  execSync(`terraform destroy -auto-approve -var="project-name=${configs.name}"`);
+  -backend-config="key=${configs.name}/terraform.tfstate"`,
+    { cwd: terraformMainDir }
+  );
+  execSync(
+    `terraform destroy -auto-approve -var="project-name=${configs.name}"`
+  );
   removeProjectFromDynamo(configs.name);
 }
 
 export async function tearDownAWS() {
   const s3BucketName = getS3Info();
   const activeProjects = await getAllProjects();
-  activeProjects.forEach(proj => {
-    console.log("removing: ", proj)
-    removeProject(proj)
+  activeProjects.forEach((proj) => {
+    console.log("removing: ", proj);
+    removeProject(proj);
   });
 
   try {
-    execSync(`terraform init -reconfigure \
+    execSync(
+      `terraform init -reconfigure \
     -backend-config="bucket=${s3BucketName}" \
     -backend-config="region=us-west-2" \
-    -backend-config="key=admin/terraform.tfstate"`, { cwd: terraformAdminDir});
-    execSync("terraform destroy -auto-approve", { cwd: terraformAdminDir});
+    -backend-config="key=admin/terraform.tfstate"`,
+      { cwd: terraformAdminDir }
+    );
+    execSync("terraform destroy -auto-approve", { cwd: terraformAdminDir });
     await emptyS3(s3BucketName);
     await removeS3(s3BucketName);
     removeLocalFile();
   } catch (err) {
-    console.error(err)
+    console.error(err);
   }
-
-}
-
 }

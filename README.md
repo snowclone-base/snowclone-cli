@@ -14,35 +14,66 @@ export AWS_SECRET_ACCESS_KEY=your_secret_access_key
 
 To install the Snowclone CLI:
 
-- clone this repository
-- run `npm install`
-- run `npm link` to establish a symlink (may need to run `sudo`)
+- Clone this repository
+- Run `npm install`
+- Run `npm link` to establish a symlink (may need to run `sudo`)
 
 ## Usage
 
 ### `snowclone init`
 
-Initialize your AWS with the necessary admin infrastructure. </br></br>
-Prompts:
+Initialize your AWS with the necessary admin infrastructure. </br>
 
-- AWS region
+```
+FLAGS
+  -r, --region: The AWS region
+
+EXAMPLE
+  snowclone init -r us-west-1
+```
 
 ### `snowclone deploy`
 
-Deploy a new backend stack to ECS Fargate. </br></br>
-Prompts:
+Deploy a new backend stack to ECS Fargate. </br>
 
-- Project name
-- AWS region
+```
+FLAGS
+  -n, --name: The name of the project
+  -r, --region: The AWS region
+
+EXAMPLE
+  snowclone deploy -n snowcones -r us-west-1
+```
 
 ### `snowclone import`
 
-Import a schema file to a backend. </br></br>
-Prompts:
+Import a sql file to a backend. </br>
 
-- Project name
-- File path
+```
+FLAGS
+  -n, --name: The name of the project to upload a sql file to
+  -f, --filepath: The path of the sql file
+
+EXAMPLE
+  snowclone import -n snowcones -f snowconesSchema.sql
+```
 
 ### `snowclone list`
 
 List all active projects.
+
+### `snowclone remove`
+
+Remove a specified project.
+
+```
+FLAGS
+  -n, --name: The name of the project backend to be removed
+
+EXAMPLE
+  snowclone remove -n snowcones
+```
+
+### `snowclone melt`
+
+Remove data for all active projects and tear down admin infrastructure from AWS.
