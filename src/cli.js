@@ -1,4 +1,9 @@
-import { createProject, deployProject, listProjects, initializeAdmin, uploadSchema, removeProject, tearDownAWS } from "./main.js";
+import { deployProject,
+        listProjects, 
+        initializeAdmin, 
+        uploadSchema, 
+        removeProject, 
+        tearDownAWS } from "./main.js";
 import { program } from "commander";
 import inquirer from "inquirer";
 
@@ -45,7 +50,7 @@ program
             name: "region",
             message: "Specify the AWS region",
           })
-        ).region,
+        ).region
     };
     deployProject(configs);
   });

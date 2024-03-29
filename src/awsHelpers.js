@@ -1,48 +1,20 @@
 
-import { DynamoDBClient, DeleteItemCommand } from "@aws-sdk/client-dynamodb"
-import { ScanCommand, PutCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import { CreateBucketCommand, DeleteObjectsCommand, DeleteBucketCommand,
-         ListObjectsV2Command, S3Client } from "@aws-sdk/client-s3";
-import { EC2Client, DescribeRegionsCommand } from "@aws-sdk/client-ec2"
-import { fileURLToPath } from 'url';
-import path from "path";
-import crypto from "crypto";
+import { DynamoDBClient,
+         DeleteItemCommand } from "@aws-sdk/client-dynamodb"
+import { ScanCommand,
+         PutCommand,
+        DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { CreateBucketCommand,
+         DeleteObjectsCommand, 
+         DeleteBucketCommand,
+         ListObjectsV2Command, 
+         S3Client } from "@aws-sdk/client-s3";
+import { EC2Client, 
+         DescribeRegionsCommand } from "@aws-sdk/client-ec2"
+import crypto from "crypto"
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const dynamoDbClient = new DynamoDBClient({region: "us-west-2"});
-const docClient = DynamoDBDocumentClient.from(dynamoDbClient);
-const client = new S3Client({ region: "us-west-2"});
-const ec2Client = new EC2Client({ region: "us-west-2" });
-
-const getS3Objects = async (bucket) => {
-  const command = new ListObjectsV2Command({
-    Bucket: bucket,
-    MaxKeys: 1,
-  });
-
-  try {
-    let isTruncated = true;
-
-    console.log("Your bucket contains the following objects:\n");
-    let contents = "";
-
-    while (isTruncated) {
-      const { Contents, IsTruncated, NextContinuationToken } =
-        await client.send(command);
-      const contentsList = Contents.map((c) => ` • ${c.Key}`).join("\n");
-      contents += contentsList + "\n";
-      isTruncated = IsTruncated;
-      command.input.ContinuationToken = NextContinuationToken;
-    }
-    console.log(contents);
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-export const createS3 = async (bucketName) => {
+export const createS3 = async (bucketName, region) => {
+  const client = new S3Client({ region: region });
   const command = new CreateBucketCommand({
     Bucket: bucketName,
   });
@@ -55,7 +27,10 @@ export const createS3 = async (bucketName) => {
   }
 }
 
-export const getProjectFromDynamo = async (projectName) => {
+export const getProjectFromDynamo = async (projectName, region) => {
+  const dynamoDbClient = new DynamoDBClient({region: region });
+  const docClient = DynamoDBDocumentClient.from(dynamoDbClient);
+
   const command = new ScanCommand({
     TableName: "backend_info",
     FilterExpression: `#name = :projectName`,
@@ -67,7 +42,10 @@ export const getProjectFromDynamo = async (projectName) => {
   return response.Items[0]
 }
 
-export const getAllProjects = async () => {
+export const getAllProjects = async (region) => {
+  const dynamoDbClient = new DynamoDBClient({region: region });
+  const docClient = DynamoDBDocumentClient.from(dynamoDbClient);
+
   const command = new ScanCommand({
     TableName: "backend_info",
   });
@@ -76,7 +54,10 @@ export const getAllProjects = async () => {
   return response.Items
 }
 
-export const addProjectToDynamo = async (projectName, backendEndpoint) => {
+export const addProjectToDynamo = async (projectName, backendEndpoint, region) => {
+  const dynamoDbClient = new DynamoDBClient({region: region });
+  const docClient = DynamoDBDocumentClient.from(dynamoDbClient);
+
   const command = new PutCommand({
     TableName: "backend_info",
     Item: {
@@ -89,8 +70,10 @@ export const addProjectToDynamo = async (projectName, backendEndpoint) => {
   return response;
 }
 
-export const removeProjectFromDynamo = async (name) => {
-  const project = await getProjectFromDynamo(name);
+export const removeProjectFromDynamo = async (name, region) => {
+  const dynamoDbClient = new DynamoDBClient({region: region });
+  const project = await getProjectFromDynamo(name, region);
+  console.log(project)
 
   try {
     const command = new DeleteItemCommand({
@@ -107,7 +90,9 @@ export const removeProjectFromDynamo = async (name) => {
   }
 }
 
-export const emptyS3 = async (bucket) => {
+export const emptyS3 = async (bucket, region) => {
+  const client = new S3Client({ region: region});
+
   try {
     const listObjectsResponse = await client.send(new ListObjectsV2Command({ Bucket: bucket }));
     const objectsToDelete = listObjectsResponse.Contents.map(obj => ({ Key: obj.Key }));
@@ -122,7 +107,8 @@ export const emptyS3 = async (bucket) => {
   }
 }
 
-export const removeS3 = async (bucket) => {
+export const removeS3 = async (bucket, region) => {
+  const client = new S3Client({ region: region });
   const command = new DeleteBucketCommand({
     Bucket: bucket,
   });
@@ -137,6 +123,7 @@ export const removeS3 = async (bucket) => {
 
 
 export const getAWSRegions = async () => {
+  const ec2Client = new EC2Client({ region: "us-west-2" });
   try {
     const command = new DescribeRegionsCommand({});
     const data = await ec2Client.send(command);
