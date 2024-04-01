@@ -41,6 +41,35 @@ function removeLocalFile() {
   })
 }
 
+function terraformInit(bucketName, region, directory) {
+  execSync(`terraform init -reconfigure \
+    -backend-config="bucket=${bucketName}" \
+    -backend-config="region=${region}" \
+    -backend-config="key=terraform.tfstate"`,
+      { cwd: directory }
+    );
+}
+
+function configureWorkspace(workspaceName, directory) {
+  execSync(`terraform workspace select -or-create ${workspaceName}`, { cwd: directory });
+}
+
+function terraformApply(name, region, directory) {
+  execSync(
+    `terraform apply -auto-approve  -var="project_name=${name}" \
+     -var="domain_name=snowclone.xyz" -var="region=${region}"`,
+    { encoding: "utf-8", cwd: directory }
+  );
+}
+
+function terraformDestroy(projectName, region, domainName, directory) {
+  execSync(`terraform destroy -auto-approve \
+    -var="project_name=${projectName}" \
+    -var="region=${region}" \
+    -var="domain_name=${domainName}"`,
+    { cwd: directory});
+}
+
 async function isValidRegion(region) {
   const regions = await getAWSRegions();
   return regions.includes(region);
@@ -53,17 +82,23 @@ function getS3Info() {
   return JSON.parse(data);
 }
 
+function addApiSchema() {
+  const intervalId = setInterval(() => {
+    const response = execSync('curl -H "Authorization: Bearer helo" -w "%{http_code}" -F "file=@sampleSchema.sql" https://beep.snowclone.xyz/schema');
+    const statusCode = parseInt(response.toString(), 10);
+    if (statusCode === 201) {
+      clearInterval(intervalId);
+    }
+  }, 5000);
+}
+
 // create S3 bucket, create admin infra and save state to the bucket. (deal w/ configs, change to try/ catch block later)
 export async function initializeAdmin(configs) {
   const s3BucketName = "snowclone-" + crypto.randomBytes(6).toString("hex");
 
   await createS3(s3BucketName, configs.region);
-  execSync(`terraform init -reconfigure \
-  -backend-config="bucket=${s3BucketName}" \
-  -backend-config="region=${configs.region}" \
-  -backend-config="key=admin/terraform.tfstate"`,
-    { cwd: terraformAdminDir }
-  );
+  terraformInit(s3BucketName, configs.region, terraformAdminDir);
+  configureWorkspace("admin", terraformAdminDir);
   console.log("Initialized admin!");
   execSync(`terraform apply -auto-approve`, { cwd: terraformAdminDir });
   console.log("Admin stack applied!");
@@ -81,27 +116,20 @@ export async function deployProject(configs) {
   }
 
   try {
-    execSync(`terraform init -reconfigure \
-    -backend-config="bucket=${bucketName}" \
-    -backend-config="region=${region}" \
-    -backend-config="key=terraform.tfstate"`,
-      { cwd: terraformMainDir }
-    );
+    terraformInit(bucketName, region, terraformMainDir);
 
     console.log("Initialized!");
-    execSync(`terraform workspace select -or-create ${configs.name}`);
+    configureWorkspace(configs.name, terraformMainDir)
     console.log("workspace initialized!");
-    execSync(
-      `terraform apply -auto-approve  -var="project_name=${configs.name}" \
-       -var="domain_name=snowclone.xyz" -var="region=${configs.region}"`,
-      { encoding: "utf-8", cwd: terraformMainDir }
-    );
+    terraformApply(configs.name, configs.region, terraformMainDir);
+    
     console.log("Stack has been deployed!");
     const tfOutputs = execSync("terraform output -json", {
       cwd: terraformMainDir,
     }).toString();
     const projectEndpoint = JSON.parse(tfOutputs).app_url.value;
     addProjectToDynamo(configs.name, projectEndpoint, region);
+    //addApiSchema()
   } catch (error) {
     console.error("Error executing Terraform apply:", error);
     process.exit(1);
@@ -133,18 +161,9 @@ export async function removeProject(configs) {
   const projectInfo = await getProjectFromDynamo(configs.name, region);
   const domainName = projectInfo.endpoint.split(".").slice(1).join(".");
 
-  const test = execSync(`terraform init -reconfigure \
-  -backend-config="bucket=${bucketName}" \
-  -backend-config="region=${region}" \
-  -backend-config="key=terraform.tfstate"`, { cwd: terraformMainDir });
-  execSync(`terraform workspace select ${configs.name}`, { cwd: terraformMainDir });
-  console.log(test.toString())
-  const test2 = execSync(`terraform destroy -auto-approve \
-  -var="project_name=${configs.name}" \
-  -var="region=${region}" \
-  -var="domain_name=${domainName}"`,
-  { cwd: terraformMainDir});
-  console.log(test2.toString());
+  terraformInit(bucketName, region, terraformMainDir);
+  configureWorkspace(configs.name, terraformMainDir);
+  terraformDestroy(configs.name, region, domainName, terraformMainDir);
   removeProjectFromDynamo(configs.name, region);
 }
 
@@ -152,16 +171,15 @@ export async function removeProject(configs) {
 export async function tearDownAWS() {
   const { bucketName, region } = getS3Info();
   const activeProjects = await getAllProjects(region);
-  activeProjects.forEach(proj => {
+  activeProjects.forEach(async proj => {
     console.log("removing: ", proj)
-    removeProject(proj)
+    await removeProject(proj)
   });
 
   try {
-    execSync(`terraform init -reconfigure \
-    -backend-config="bucket=${bucketName}" \
-    -backend-config="region=us-west-2" \
-    -backend-config="key=admin/terraform.tfstate"`, { cwd: terraformAdminDir});
+    terraformInit(bucketName, region, terraformAdminDir);
+    configureWorkspace("admin", terraformAdminDir);
+    console.log("initialized!!")
     execSync("terraform destroy -auto-approve", { cwd: terraformAdminDir});
     await emptyS3(bucketName, region);
     await removeS3(bucketName, region);
@@ -169,5 +187,5 @@ export async function tearDownAWS() {
   } catch (err) {
     console.error(err)
   }
-
 }
+
