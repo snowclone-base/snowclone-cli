@@ -54,7 +54,7 @@ export const getAllProjects = async (region) => {
   return response.Items
 }
 
-export const addProjectToDynamo = async (projectName, backendEndpoint, region) => {
+export const addProjectToDynamo = async (projectName, backendEndpoint, region, apiToken, jwtSecret, pgUsername, pgPassword) => {
   const dynamoDbClient = new DynamoDBClient({region: region });
   const docClient = DynamoDBDocumentClient.from(dynamoDbClient);
 
@@ -65,6 +65,10 @@ export const addProjectToDynamo = async (projectName, backendEndpoint, region) =
       name: projectName,
       endpoint: backendEndpoint,
       region: region,
+      apiToken: apiToken,
+      jwtSecret: jwtSecret,
+      pgUsername: pgUsername,
+      pgPassword: pgPassword,
     }
   })
   const response = await docClient.send(command);

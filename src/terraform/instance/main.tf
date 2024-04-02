@@ -1,159 +1,9 @@
-provider "aws" {
-  region = var.region
-}
-
-data "aws_iam_role" "ecsTaskExecutionRole" {
-  name = "ecsTaskExecutionRole"
-}
-
-# create RDS
-resource "aws_db_instance" "rds-db" {
-  allocated_storage      = 10
-  apply_immediately      = true
-  db_name                = "postgres"
-  engine                 = "postgres"
-  engine_version         = "14"
-  instance_class         = "db.t3.micro"
-  parameter_group_name   = aws_db_parameter_group.rds.name
-  vpc_security_group_ids = [aws_security_group.rds.id]
-  skip_final_snapshot    = true
-  username               = "postgres"
-  password               = "postgres"
-
-}
-
-# create parameter group for db
-resource "aws_db_parameter_group" "rds" {
-  name   = var.project_name
-  family = "postgres14"
-
-  parameter {
-    name  = "log_connections"
-    value = "1"
-  }
-}
-
-resource "aws_security_group" "rds" {
-  name   = "${var.project_name}_rds"
-  vpc_id = aws_default_vpc.default_vpc.id
-
-  ingress {
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.project_name}_rds"
-  }
-}
-
-
-######################################################################################
-#                           END New RDS Section                                      #
-######################################################################################
-
-# provision cluster & capacity providers
-resource "aws_ecs_cluster" "project_name" {
-  name = var.project_name
-
-}
-
-resource "aws_ecs_cluster_capacity_providers" "project_name" {
-  cluster_name = aws_ecs_cluster.project_name.name
-
-  capacity_providers = ["FARGATE"]
-
-  default_capacity_provider_strategy {
-    base              = 1
-    weight            = 50
-    capacity_provider = "FARGATE"
-  }
-}
-
-# Create a CloudWatch Logs group
-resource "aws_cloudwatch_log_group" "ecs_logs" {
-  name              = "/ecs/${var.project_name}"
-  retention_in_days = 30 # Adjust retention policy as needed
-}
-
-# provision security groups
-resource "aws_security_group" "allow_all" {
-  name        = "${var.project_name}_lb_sg"
-  description = "testing out ingress and egress in tf "
-  vpc_id      = aws_default_vpc.default_vpc.id
-  tags = {
-    Name = "openBothWays"
-  }
-}
-
-# Ingress rule
-resource "aws_vpc_security_group_ingress_rule" "allow_all" {
-  security_group_id = aws_security_group.allow_all.id
-
-  cidr_ipv4   = "0.0.0.0/0"
-  ip_protocol = -1 #all protocols
-}
-
-# Egress rule
-resource "aws_vpc_security_group_egress_rule" "allow_all" {
-  security_group_id = aws_security_group.allow_all.id
-
-  cidr_ipv4   = "0.0.0.0/0"
-  ip_protocol = -1 #all protocols
-}
-
-# Create an SSL/TLS certificate
-resource "aws_acm_certificate" "cert" {
-  domain_name       = "*.${var.domain_name}"
-  validation_method = "DNS"
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
-data "aws_route53_zone" "zone" {
-  name         = var.domain_name
-  private_zone = false
-}
-
-resource "aws_route53_record" "record" {
-  for_each = {
-    for dvo in aws_acm_certificate.cert.domain_validation_options : dvo.domain_name => {
-      name   = dvo.resource_record_name
-      record = dvo.resource_record_value
-      type   = dvo.resource_record_type
-    }
-  }
-
-  allow_overwrite = true
-  name            = each.value.name
-  records         = [each.value.record]
-  ttl             = 60
-  type            = each.value.type
-  zone_id         = data.aws_route53_zone.zone.zone_id
-}
-
-resource "aws_acm_certificate_validation" "cert" {
-  certificate_arn         = aws_acm_certificate.cert.arn
-  validation_record_fqdns = [for record in aws_route53_record.record : record.fqdn]
-}
-
 # provision ALB
 resource "aws_lb" "alb" {
-  name               =  "${var.project_name}-alb"
+  name               = "${var.project_name}-alb"
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.allow_all.id] # need to make SGs
+  security_groups    = [aws_security_group.alb_web_traffic.id]
   subnets            = [aws_default_subnet.default_subnet_a.id, aws_default_subnet.default_subnet_b.id]
 }
 
@@ -161,6 +11,10 @@ data "aws_lb" "alb" {
   name = aws_lb.alb.name
 
   depends_on = [aws_lb.alb]
+}
+
+data "aws_route53_zone" "zone" {
+  zone_id = var.aws_route53_zone_id
 }
 
 # Create Route 53 record
@@ -236,13 +90,17 @@ resource "aws_lb_listener" "alb-listener-http" {
   }
 }
 
+data "aws_acm_certificate" "cert" {
+  domain = "*.snowclone.xyz"
+}
+
 # Step 2: Configure the ALB listener with HTTPS
 resource "aws_lb_listener" "alb-listener-https" {
   load_balancer_arn = aws_lb.alb.arn
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = aws_acm_certificate.cert.arn
+  certificate_arn   = data.aws_acm_certificate.cert.arn
 
   default_action {
     type             = "forward"
@@ -283,133 +141,6 @@ resource "aws_lb_listener_rule" "schema-upload" {
   }
 }
 
-# api task definition
-resource "aws_ecs_task_definition" "api" {
-  family                   = "api"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = 256
-  memory                   = 512
-  execution_role_arn       = data.aws_iam_role.ecsTaskExecutionRole.arn
-
-  container_definitions = jsonencode([
-    {
-      name  = "eventserver-container"
-      image = "snowclone/eventserver:3.0.1"
-      portMappings = [
-        {
-          name          = "eventserver-port-8080"
-          containerPort = 8080
-        }
-      ]
-      essential = true
-      environment = [
-        { name = "PG_USER", value = "postgres" },
-        { name = "PG_PASSWORD", value = "postgres" },
-        { name = "PG_HOST", value = "${aws_db_instance.rds-db.address}" },
-        { name = "PG_PORT", value = "5432" },
-        { name = "PG_DATABASE", value = "postgres" }
-        # { name = "DATABASE_URL", value = "postgresql://postgres:postgres@${aws_db_instance.rds-db.endpoint}/postgres" }
-      ]
-      healthcheck = {
-        command     = ["CMD-SHELL", "curl http://localhost:8080/ || exit 1"], # Example health check command
-        interval    = 5,
-        timeout     = 5,
-        startPeriod = 10,
-        retries     = 5
-      }
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          awslogs-group         = aws_cloudwatch_log_group.ecs_logs.name
-          awslogs-region        = var.region
-          awslogs-stream-prefix = "event-server"
-        }
-      }
-    },
-    {
-      name  = "schema-server-container"
-      image = "snowclone/schema-server:2.0.2"
-
-      portMappings = [
-        {
-          name          = "schema-server-port-8080"
-          containerPort = 5175
-        }
-      ]
-      essential = true
-      environment = [
-        { name = "DATABASE_URL", value = "postgresql://postgres:postgres@${aws_db_instance.rds-db.endpoint}/postgres" },
-        { name = "API_TOKEN", value = "helo" },
-      ]
-      healthcheck = {
-        command     = ["CMD-SHELL", "curl http://localhost:5175/V1/api || exit 1"], # Example health check command
-        interval    = 5,
-        timeout     = 5,
-        startPeriod = 10,
-        retries     = 5
-      }
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          awslogs-group         = aws_cloudwatch_log_group.ecs_logs.name
-          awslogs-region        = var.region
-          awslogs-stream-prefix = "schema-server"
-        }
-      }
-    }
-  ])
-}
-
-# postgrest task definition
-resource "aws_ecs_task_definition" "postgrest" {
-  family                   = "postgrest"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = 256
-  memory                   = 512
-  execution_role_arn       = data.aws_iam_role.ecsTaskExecutionRole.arn
-
-  container_definitions = jsonencode([
-    {
-      name  = "postgrest-container"
-      image = "snowclone/postg-rest:latest"
-      #   memory = 512
-      #   cpu    = 256
-      portMappings = [
-        {
-          name          = "postgrest-port-3000"
-          containerPort = 3000
-        }
-      ]
-      essential = true
-      environment = [
-        { name = "PGRST_DB_URI", value = "postgres://authenticator:mysecretpassword@${aws_db_instance.rds-db.endpoint}/postgres" },
-        { name = "PGRST_DB_SCHEMA", value = "api" },
-        { name = "PGRST_DB_ANON_ROLE", value = "anon" },
-        { name = "PGRST_OPENAPI_SERVER_PROXY_URI", value = "http://localhost:3000" },
-        { name = "PGRST_ADMIN_SERVER_PORT", value = "3001" },
-        { name = "PGRST_JWT_SECRET", value = "O9fGlY0rDdDyW1SdCTaoqLmgQ2zZeCz6" } #added so we could test adding to db
-      ],
-      healthcheck = {
-        command     = ["CMD-SHELL", "curl -f http://localhost:3001/ready || exit 1"]
-        interval    = 5
-        timeout     = 5
-        startPeriod = 10
-        retries     = 5
-      }
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          awslogs-group         = aws_cloudwatch_log_group.ecs_logs.name
-          awslogs-region        = var.region
-          awslogs-stream-prefix = "postgrest"
-        }
-      }
-    }
-  ])
-}
-
 # provision api service
 resource "aws_ecs_service" "api-service" {
   name            = "api-service"
@@ -432,9 +163,10 @@ resource "aws_ecs_service" "api-service" {
   }
 
   network_configuration {
-    subnets          = [aws_default_subnet.default_subnet_a.id, aws_default_subnet.default_subnet_b.id]
-    assign_public_ip = true                              # Provide the containers with public IPs
-    security_groups  = [aws_security_group.allow_all.id] # Set up the security group
+    # update
+    subnets          = [data.aws_subnet.private_subnet_a.id, data.aws_subnet.private_subnet_b.id]
+    assign_public_ip = false
+    security_groups  = [aws_security_group.api_servers.id]
   }
 }
 
@@ -454,22 +186,11 @@ resource "aws_ecs_service" "postgrest-service" {
   }
 
   network_configuration {
-    subnets          = [aws_default_subnet.default_subnet_a.id, aws_default_subnet.default_subnet_b.id]
-    assign_public_ip = true                              # Provide the containers with public IPs
-    security_groups  = [aws_security_group.allow_all.id] # Set up the security group
+    # update subnet declaration
+    subnets          = [data.aws_subnet.private_subnet_a.id, data.aws_subnet.private_subnet_b.id]
+    assign_public_ip = false
+    security_groups  = [aws_security_group.api_servers.id]
   }
-}
-
-# VPC and private subnets
-resource "aws_default_vpc" "default_vpc" {}
-
-# Provide references to your default subnets
-resource "aws_default_subnet" "default_subnet_a" {
-  availability_zone = "${var.region}a"
-}
-
-resource "aws_default_subnet" "default_subnet_b" {
-  availability_zone = "${var.region}b"
 }
 
 output "app_url" {

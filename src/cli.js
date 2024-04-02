@@ -24,6 +24,15 @@ program
             message: "Specify your desired AWS region",
           })
         ).region,
+      domain:
+        options.domain ||
+          (
+            await inquirer.prompt({
+              type: "input",
+              name: "domain",
+              message: "Specify your domain name",
+            })
+          ).domain
     };
     initializeAdmin(configs);
   });
@@ -45,15 +54,6 @@ program
             message: "Specify the project name",
           })
         ).name,
-      region:
-        options.region ||
-        (
-          await inquirer.prompt({
-            type: "input",
-            name: "region",
-            message: "Specify the AWS region",
-          })
-        ).region,
       domain:
         options.domain ||
         (
@@ -63,6 +63,42 @@ program
             message: "Specify the project's domain name",
           })
         ).domain,
+      pgUsername:
+          options.pgUsername ||
+          (
+            await inquirer.prompt({
+              type: "input",
+              name: "pgUsername",
+              message: "Specify a postgres password",
+            })
+          ).pgUsername,
+      pgPassword:
+          options.pgPassword ||
+          (
+            await inquirer.prompt({
+              type: "input",
+              name: "pgPassword",
+              message: "Specify a postgres username",
+            })
+          ).pgPassword,
+      jwtSecret:
+          options.jwtSecret ||
+            (
+              await inquirer.prompt({
+                type: "input",
+                name: "jwtSecret",
+                message: "Specify a JWT secret",
+              })
+            ).jwtSecret,
+      apiToken:
+          options.apiToken ||
+            (
+              await inquirer.prompt({
+                type: "input",
+                name: "apiToken",
+                message: "Specify an API token",
+              })
+            ).apiToken,
     };
     deployProject(configs);
   });
