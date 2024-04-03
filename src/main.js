@@ -2,16 +2,18 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { execSync } from "child_process";
-import { fileURLToPath } from 'url';
+import { fileURLToPath } from "url";
 import crypto from "crypto";
-import { addProjectToDynamo,
-        getProjectFromDynamo,
-        removeProjectFromDynamo, 
-        createS3,
-        getAllProjects,
-        getAWSRegions,
-        emptyS3,
-        removeS3 } from "./awsHelpers.js"
+import {
+  addProjectToDynamo,
+  getProjectFromDynamo,
+  removeProjectFromDynamo,
+  createS3,
+  getAllProjects,
+  getAWSRegions,
+  emptyS3,
+  removeS3,
+} from "./awsHelpers.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,9 +39,9 @@ function saveInfoForProjects(bucketName, region, domain, subnetAid, subnetBid, r
 function removeLocalFile() {
   fs.unlink(appDir, (err) => {
     if (err) {
-      console.error(err)
-    } 
-  })
+      console.error(err);
+    }
+  });
 }
 
 function terraformInit(bucketName, region, directory) {
@@ -160,8 +162,10 @@ export async function uploadSchema(schemaFile, projectName) {
   try {
     const project = await getProjectFromDynamo(projectName, region);
     const endpoint = project.endpoint;
-    execSync(`curl -H "Authorization: Bearer helo" -F 'file=@${schemaFile}' ${endpoint}/schema`);
-    console.log("Schema imported successfully!")
+    execSync(
+      `curl -H "Authorization: Bearer helo" -F 'file=@${schemaFile}' ${endpoint}/schema`
+    );
+    console.log("Schema imported successfully!");
   } catch (err) {
     console.error(err);
   }
@@ -172,7 +176,7 @@ export async function listProjects() {
   const projects = await getAllProjects(region);
   const projectNames = projects.map((proj) => proj.name);
   console.log("Active Projects: ");
-  projectNames.forEach(proj => console.log(proj));
+  projectNames.forEach((proj) => console.log(proj));
 }
 
 export async function removeProject(configs) {
@@ -204,8 +208,8 @@ export async function tearDownAWS() {
     -var="region=${region}" -var="domain_name=${domain}"`, { cwd: terraformAdminDir});
     await emptyS3(bucketName, region);
     await removeS3(bucketName, region);
+
   } catch (err) {
-    console.error(err)
+    console.error(err);
   }
 }
-
