@@ -161,11 +161,9 @@ export async function uploadSchema(schemaFile, projectName) {
   const { region }= getInfoForProjects();
   try {
     const project = await getProjectFromDynamo(projectName, region);
-    const endpoint = project.endpoint;
-    execSync(
-      `curl -H "Authorization: Bearer helo" -F 'file=@${schemaFile}' ${endpoint}/schema`
-    );
-    console.log("Schema imported successfully!");
+    const { endpoint, apiToken } = project;
+    const response = execSync(`curl -H "Authorization: Bearer ${apiToken}" -F 'file=@${schemaFile}' https://${endpoint}/schema`);
+    console.log(response.toString());
   } catch (err) {
     console.error(err);
   }
