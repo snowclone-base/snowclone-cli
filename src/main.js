@@ -22,8 +22,8 @@ const terraformAdminDir = path.join(__dirname, "terraform/admin");
 const sqlDir = path.join(__dirname, "sql")
 
 // save bucket name to users home directory in snowclone folder
-function saveInfoForProjects(bucketName, region, subnetAid, subnetBid, route53ZoneId) {
-  const data = { bucketName, region, subnetAid, subnetBid, route53ZoneId };
+function saveInfoForProjects(bucketName, region, domain, subnetAid, subnetBid, route53ZoneId) {
+  const data = { bucketName, region, domain, subnetAid, subnetBid, route53ZoneId };
   fs.mkdirSync(appDir, { recursive: true });
   const fileName = path.join(appDir, "S3.json");
 
@@ -53,7 +53,7 @@ function terraformInit(bucketName, region, directory) {
 }
 
 function configureWorkspace(workspaceName, directory) {
-  execSync(`terraform workspace select -or-create ${workspaceName}`, { cwd: directory });
+  execSync(`terraform workspace select -or-create ${workspaceName}`, { encoding: "utf-8", cwd: directory });
 }
 
 function terraformApply(projectName, region, directory, domainName, subnetAid, subnetBid, pgUsername, pgPassword, jwtSecret, apiToken, route53ZoneId) {
@@ -92,9 +92,9 @@ function getInfoForProjects() {
   return JSON.parse(data);
 }
 
-function addApiSchema(apiToken) {
+function addApiSchema(apiToken, projectName, domain) {
   const intervalId = setInterval(() => {
-    const response = execSync(`curl -H "Authorization: Bearer ${apiToken}" -o /dev/null -w "%{http_code}" -F "file=@apiSchema.sql" https://test.snowclone.xyz/schema`, { cwd: sqlDir});
+    const response = execSync(`curl -H "Authorization: Bearer ${apiToken}" -o /dev/null -w "%{http_code}" -F "file=@apiSchema.sql" https://${projectName}.${domain}/schema`, { encoding: "utf-8", cwd: sqlDir});
     const statusCode = parseInt(response.toString(), 10);
     console.log("status code: ", statusCode);
     if (statusCode === 201) {
@@ -126,22 +126,21 @@ export async function initializeAdmin(configs) {
   const subnetAid = JSON.parse(tfOutputs).private_subnet_a_id.value;
   const subnetBid = JSON.parse(tfOutputs).private_subnet_b_id.value;
   const route53ZoneId = JSON.parse(tfOutputs).aws_route53_zone_id.value
-  saveInfoForProjects(s3BucketName, configs.region, subnetAid, subnetBid, route53ZoneId);
+  saveInfoForProjects(s3BucketName, configs.region, configs.domain, subnetAid, subnetBid, route53ZoneId);
 }
 
 // provision backend, save endpoint to dynamo
 export async function deployProject(configs) {
-  const { bucketName, region, subnetAid, subnetBid, route53ZoneId } = getInfoForProjects();
-
+  const { bucketName, region, subnetAid, subnetBid, route53ZoneId, domain } = getInfoForProjects();
+  
   try {
     terraformInit(bucketName, region, terraformMainDir);
     console.log("Initialized!");
     configureWorkspace(configs.name, terraformMainDir)
     console.log("workspace initialized!");
-    terraformApply("test", "us-west-2", terraformMainDir, "snowclone.xyz",
-    subnetAid, subnetBid, "postgres", "postgres",
-    "O9fGlY0rDdDyW1SdCTaoqLmgQ2zZeCz6","test", route53ZoneId);
-    
+    terraformApply(configs.name, region, terraformMainDir, configs.domain,
+                  subnetAid, subnetBid, configs.pgUsername, configs.pgPassword,
+                  configs.jwtSecret,configs.apiToken, route53ZoneId);  
     console.log("Stack has been deployed!");
     const tfOutputs = execSync("terraform output -json", {
       cwd: terraformMainDir,
@@ -149,7 +148,7 @@ export async function deployProject(configs) {
     const projectEndpoint = JSON.parse(tfOutputs).app_url.value;
     addProjectToDynamo(configs.name, projectEndpoint, region, configs.apiToken,
                        configs.jwtSecret, configs.pgUsername, configs.pgPassword);
-    addApiSchema(configs.apiToken)
+    addApiSchema(configs.apiToken, configs.name, domain)
   } catch (error) {
     console.error("Error executing Terraform apply:", error);
     process.exit(1);
@@ -191,22 +190,20 @@ export async function removeProject(configs) {
 }
 
 export async function tearDownAWS() {
-  const { bucketName, region } = getInfoForProjects();
+  const { bucketName, region, domain } = getInfoForProjects();
   const activeProjects = await getAllProjects(region);
-  activeProjects.forEach(async proj => {
-    console.log("removing: ", proj)
-    await removeProject(proj)
-  });
+  await Promise.all(activeProjects.map(async proj => {
+    await removeProject(proj);
+  }));
 
   try {
     terraformInit(bucketName, region, terraformAdminDir);
     configureWorkspace("admin", terraformAdminDir);
     console.log("initialized!!")
-    execSync("terraform destroy -auto-approve \
-    -var", { cwd: terraformAdminDir});
+    execSync(`terraform destroy -auto-approve \
+    -var="region=${region}" -var="domain_name=${domain}"`, { cwd: terraformAdminDir});
     await emptyS3(bucketName, region);
     await removeS3(bucketName, region);
-    removeLocalFile();
   } catch (err) {
     console.error(err)
   }
