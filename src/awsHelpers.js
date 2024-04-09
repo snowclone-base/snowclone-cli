@@ -1,6 +1,7 @@
 
 import { DynamoDBClient,
-         DeleteItemCommand } from "@aws-sdk/client-dynamodb"
+         DeleteItemCommand,
+         DescribeTableCommand } from "@aws-sdk/client-dynamodb"
 import { ScanCommand,
          PutCommand,
         DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
@@ -39,7 +40,7 @@ export const getProjectFromDynamo = async (projectName, region) => {
   });
 
   const response = await docClient.send(command)
-  return response.Items[0]
+  return response.Items[0];
 }
 
 export const getAllProjects = async (region) => {
@@ -51,7 +52,7 @@ export const getAllProjects = async (region) => {
   });
 
   const response = await docClient.send(command);
-  return response.Items
+  return response.Items;
 }
 
 export const addProjectToDynamo = async (projectName, backendEndpoint, region, apiToken, jwtSecret, pgUsername, pgPassword) => {
@@ -93,6 +94,21 @@ export const removeProjectFromDynamo = async (name, region) => {
 } catch (err) {
   console.error(err);
   }
+}
+
+export const dynamoDbExists = async (region) => {
+  try {
+  const dynamoDbClient = new DynamoDBClient({ region: region });
+  const describeTableCommand = new DescribeTableCommand({
+    TableName: "backend_info"
+  });
+  await dynamoDbClient.send(describeTableCommand);
+  console.log(true)
+  return true;
+  } catch (error) {
+    return false
+  }
+  
 }
 
 export const emptyS3 = async (bucket, region) => {

@@ -4,10 +4,15 @@ import {
   initializeAdmin,
   uploadSchema,
   removeProject,
-  tearDownAWS,
+  removeProjects,
+  removeAdmin
 } from "./main.js";
 import { program } from "commander";
 import inquirer from "inquirer";
+import ora from "ora";
+
+const COLORS = ["red", "green", "blue", "yellow", "magenta", "cyan", "white", "gray"];
+let randomIndex = Math.floor(Math.random() * COLORS.length);
 
 program
   .command("init")
@@ -34,8 +39,11 @@ program
             })
           ).domain
     };
-    initializeAdmin(configs);
-  });
+    const spinner = ora("Initializing admin infrastructure. This could take several mintues.").start();
+    
+    initializeAdmin(configs)
+    spinner.succeed("Successfully deployed! You are ready to deploy projects.");
+  }); 
 
 program
   .command("deploy")
@@ -158,6 +166,28 @@ program
     removeProject(configs);
   });
 
+  program
+  .command("destroy")
+  .description("Remove all backend projects from AWS")
+  .action(async () => {
+    console.log(
+      "Warning: This action is irreversible and will destroy all backends"
+    );
+
+    const answer = await inquirer.prompt([
+      {
+        type: "input",
+        name: "confirmation",
+        message: 'To proceed, type "yes":',
+      },
+    ]);
+    if (answer.confirmation.toLowerCase() === "yes") {
+      await removeProjects();
+    } else {
+      console.log("Operation aborted.");
+    }
+  });  
+
 program
   .command("melt")
   .description("Remove admin infrastructure from AWS")
@@ -174,7 +204,7 @@ program
       },
     ]);
     if (answer.confirmation.toLowerCase() === "yes") {
-      tearDownAWS();
+      await removeAdmin();
     } else {
       console.log("Operation aborted.");
     }

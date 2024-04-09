@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { execSync } from "child_process";
+import { execSync, spawn } from "child_process";
 import { fileURLToPath } from 'url';
 import crypto from "crypto";
 import { addProjectToDynamo,
@@ -11,7 +11,8 @@ import { addProjectToDynamo,
         getAllProjects,
         getAWSRegions,
         emptyS3,
-        removeS3 } from "./awsHelpers.js"
+        removeS3,
+        dynamoDbExists } from "./awsHelpers.js"
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,14 +35,6 @@ function saveInfoForProjects(bucketName, region, domain, subnetAid, subnetBid, r
   });
 }
 
-function removeLocalFile() {
-  fs.unlink(appDir, (err) => {
-    if (err) {
-      console.error(err)
-    } 
-  })
-}
-
 function terraformInit(bucketName, region, directory) {
   let output = execSync(`terraform init -reconfigure \
     -backend-config="bucket=${bucketName}" \
@@ -49,11 +42,17 @@ function terraformInit(bucketName, region, directory) {
     -backend-config="key=terraform.tfstate"`,
       { cwd: directory }
     );
-    console.log("output: ", output.toString())
+    //console.log("output: ", output.toString())
 }
 
 function configureWorkspace(workspaceName, directory) {
   execSync(`terraform workspace select -or-create ${workspaceName}`, { encoding: "utf-8", cwd: directory });
+}
+
+function terraformApplyAdmin(configs, directory) {
+  execSync(`terraform apply -auto-approve \
+  -var="region=${configs.region}" -var="domain_name=${configs.domain}"`,
+ { encoding: "utf-8", cwd: directory })
 }
 
 function terraformApply(projectName, region, directory, domainName, subnetAid, subnetBid, pgUsername, pgPassword, jwtSecret, apiToken, route53ZoneId) {
@@ -67,6 +66,8 @@ function terraformApply(projectName, region, directory, domainName, subnetAid, s
     { encoding: "utf-8", cwd: directory }
   );
 }
+
+
 
 function terraformDestroy(projectName, region, directory, domainName, subnetAid, subnetBid, pgUsername, pgPassword, jwtSecret, apiToken, route53ZoneId) {
   execSync(
@@ -86,7 +87,7 @@ async function isValidRegion(region) {
 }
 
 // get info from file we saved
-function getInfoForProjects() {
+export function getInfoForProjects() {
   const s3File = path.join(appDir, "S3.json");
   const data = fs.readFileSync(s3File, "utf8");
   return JSON.parse(data);
@@ -117,9 +118,8 @@ export async function initializeAdmin(configs) {
   terraformInit(s3BucketName, configs.region, terraformAdminDir);
   configureWorkspace("admin", terraformAdminDir);
   console.log("Initialized admin!");
-  execSync(`terraform apply -auto-approve \
-            -var="region=${configs.region}" -var="domain_name=${configs.domain}"`, { cwd: terraformAdminDir });
-  console.log("Admin stack applied!");
+  
+  terraformApplyAdmin(configs, terraformAdminDir);
   const tfOutputs = execSync("terraform output -json", {
     cwd: terraformAdminDir,
   }).toString();
@@ -135,9 +135,7 @@ export async function deployProject(configs) {
   
   try {
     terraformInit(bucketName, region, terraformMainDir);
-    console.log("Initialized!");
     configureWorkspace(configs.name, terraformMainDir)
-    console.log("workspace initialized!");
     terraformApply(configs.name, region, terraformMainDir, configs.domain,
                   subnetAid, subnetBid, configs.pgUsername, configs.pgPassword,
                   configs.jwtSecret,configs.apiToken, route53ZoneId);  
@@ -159,9 +157,9 @@ export async function uploadSchema(schemaFile, projectName) {
   const { region }= getInfoForProjects();
   try {
     const project = await getProjectFromDynamo(projectName, region);
-    const endpoint = project.endpoint;
-    execSync(`curl -H "Authorization: Bearer helo" -F 'file=@${schemaFile}' ${endpoint}/schema`);
-    console.log("Schema imported successfully!")
+    const { endpoint, apiToken } = project;
+    const response = execSync(`curl -H "Authorization: Bearer ${apiToken}" -F 'file=@${schemaFile}' https://${endpoint}/schema`);
+    console.log(response.toString());
   } catch (err) {
     console.error(err);
   }
@@ -171,6 +169,10 @@ export async function listProjects() {
   const { region } = getInfoForProjects();
   const projects = await getAllProjects(region);
   const projectNames = projects.map((proj) => proj.name);
+  if (projects.length === 0) {
+    console.log("You have no active projects.");
+    return
+  }
   console.log("Active Projects: ");
   projectNames.forEach(proj => console.log(proj));
 }
@@ -189,23 +191,33 @@ export async function removeProject(configs) {
   removeProjectFromDynamo(configs.name, region);
 }
 
-export async function tearDownAWS() {
+export async function removeAdmin() {
   const { bucketName, region, domain } = getInfoForProjects();
-  const activeProjects = await getAllProjects(region);
-  await Promise.all(activeProjects.map(async proj => {
-    await removeProject(proj);
-  }));
-
   try {
     terraformInit(bucketName, region, terraformAdminDir);
     configureWorkspace("admin", terraformAdminDir);
     console.log("initialized!!")
     execSync(`terraform destroy -auto-approve \
     -var="region=${region}" -var="domain_name=${domain}"`, { cwd: terraformAdminDir});
+    console.log("removing s3")
     await emptyS3(bucketName, region);
-    await removeS3(bucketName, region);
+    console.log("s3 emptied")
+    await removeS3(bucketName, region)
+    console.log("s3 removed")
   } catch (err) {
     console.error(err)
   }
 }
 
+
+export async function removeProjects() {
+  const { region } = getInfoForProjects();
+  const dynamoExists = await dynamoDbExists(region);
+  if (dynamoExists) {
+    const activeProjects = await getAllProjects(region);
+    await Promise.all(activeProjects.map(async proj => {
+      await removeProject(proj);
+    }));
+    console.log("Projects removed!")
+  }
+}
