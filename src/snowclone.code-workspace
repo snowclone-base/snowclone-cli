@@ -1,0 +1,29 @@
+{
+	"folders": [
+		{
+			"path": "../../relay"
+		},
+		{
+			"path": "../../numDialer"
+		},
+		{
+			"path": "../../../docker"
+		},
+		{
+			"path": "../../terraform-aws-ecs"
+		},
+		{
+			"path": "../../tinker_test"
+		},
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../../snowclone-cli"
+		},
+		{
+			"path": "../../../snowclone-terra"
+		}
+	],
+	"settings": {}
+}

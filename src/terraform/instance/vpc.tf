@@ -16,11 +16,3 @@ data "aws_subnet" "private_subnet_a" {
 data "aws_subnet" "private_subnet_b" {
   id = var.private_subnet_b_id
 }
-
-# data "aws_subnet" "private_subnet_a" {
-#   id = "subnet-0d690501b25fbbd8c"
-# }
-
-# data "aws_subnet" "private_subnet_b" {
-#   id = "subnet-074539ebf00dac577"
-# }

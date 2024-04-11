@@ -42,7 +42,6 @@ function terraformInit(bucketName, region, directory) {
     -backend-config="key=terraform.tfstate"`,
       { cwd: directory }
     );
-    //console.log("output: ", output.toString())
 }
 
 function configureWorkspace(workspaceName, directory) {
@@ -97,7 +96,6 @@ function addApiSchema(apiToken, projectName, domain) {
   const intervalId = setInterval(() => {
     const response = execSync(`curl -H "Authorization: Bearer ${apiToken}" -o /dev/null -w "%{http_code}" -F "file=@apiSchema.sql" https://${projectName}.${domain}/schema`, { encoding: "utf-8", cwd: sqlDir});
     const statusCode = parseInt(response.toString(), 10);
-    console.log("status code: ", statusCode);
     if (statusCode === 201) {
       clearInterval(intervalId);
     }
@@ -117,7 +115,6 @@ export async function initializeAdmin(configs) {
   await createS3(s3BucketName, configs.region);
   terraformInit(s3BucketName, configs.region, terraformAdminDir);
   configureWorkspace("admin", terraformAdminDir);
-  console.log("Initialized admin!");
   
   terraformApplyAdmin(configs, terraformAdminDir);
   const tfOutputs = execSync("terraform output -json", {
@@ -136,10 +133,9 @@ export async function deployProject(configs) {
   try {
     terraformInit(bucketName, region, terraformMainDir);
     configureWorkspace(configs.name, terraformMainDir)
-    terraformApply(configs.name, region, terraformMainDir, configs.domain,
+    terraformApply(configs.name, region, terraformMainDir, domain,
                   subnetAid, subnetBid, configs.pgUsername, configs.pgPassword,
                   configs.jwtSecret,configs.apiToken, route53ZoneId);  
-    console.log("Stack has been deployed!");
     const tfOutputs = execSync("terraform output -json", {
       cwd: terraformMainDir,
     }).toString();
@@ -159,7 +155,6 @@ export async function uploadSchema(schemaFile, projectName) {
     const project = await getProjectFromDynamo(projectName, region);
     const { endpoint, apiToken } = project;
     const response = execSync(`curl -H "Authorization: Bearer ${apiToken}" -F 'file=@${schemaFile}' https://${endpoint}/schema`);
-    console.log(response.toString());
   } catch (err) {
     console.error(err);
   }
@@ -169,12 +164,7 @@ export async function listProjects() {
   const { region } = getInfoForProjects();
   const projects = await getAllProjects(region);
   const projectNames = projects.map((proj) => proj.name);
-  if (projects.length === 0) {
-    console.log("You have no active projects.");
-    return
-  }
-  console.log("Active Projects: ");
-  projectNames.forEach(proj => console.log(proj));
+  return projectNames;
 }
 
 export async function removeProject(configs) {
@@ -196,19 +186,14 @@ export async function removeAdmin() {
   try {
     terraformInit(bucketName, region, terraformAdminDir);
     configureWorkspace("admin", terraformAdminDir);
-    console.log("initialized!!")
     execSync(`terraform destroy -auto-approve \
     -var="region=${region}" -var="domain_name=${domain}"`, { cwd: terraformAdminDir});
-    console.log("removing s3")
     await emptyS3(bucketName, region);
-    console.log("s3 emptied")
     await removeS3(bucketName, region)
-    console.log("s3 removed")
   } catch (err) {
     console.error(err)
   }
 }
-
 
 export async function removeProjects() {
   const { region } = getInfoForProjects();
@@ -218,6 +203,5 @@ export async function removeProjects() {
     await Promise.all(activeProjects.map(async proj => {
       await removeProject(proj);
     }));
-    console.log("Projects removed!")
   }
 }
