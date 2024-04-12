@@ -24,7 +24,11 @@ export async function melt(options) {
   } else {
     console.log(chalk.red("Operation aborted."));
   }
+
+  const spinner = createSpinner(
+  "Removing from AWS..."
+  );
   spinner.start();
-  await removeAdmin(configs);
+  await removeAdmin();
   spinner.succeed("Your project has been removed!");
 }

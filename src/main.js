@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { execSync, spawn } from "child_process";
+import { execSync, exec, spawn } from "child_process";
 import { fileURLToPath } from 'url';
 import crypto from "crypto";
 import { addProjectToDynamo,
@@ -12,7 +12,7 @@ import { addProjectToDynamo,
         getAWSRegions,
         emptyS3,
         removeS3,
-        dynamoDbExists } from "./awsHelpers.js"
+        dynamoDbExists } from "./utils/awsHelpers.js"
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,13 +35,23 @@ function saveInfoForProjects(bucketName, region, domain, subnetAid, subnetBid, r
   });
 }
 
-function terraformInit(bucketName, region, directory) {
-  let output = execSync(`terraform init -reconfigure \
+export async function terraformInit(bucketName, region, directory) {
+  return new Promise((resolve, reject) => {
+    exec(`terraform init -reconfigure \
     -backend-config="bucket=${bucketName}" \
     -backend-config="region=${region}" \
     -backend-config="key=terraform.tfstate"`,
-      { cwd: directory }
+      { cwd: directory },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(new Error(`Failed to initialize Terraform: ${stderr}`));
+        } else {
+          resolve(stdout);
+        }
+      }
     );
+  })
+  
 }
 
 function configureWorkspace(workspaceName, directory) {

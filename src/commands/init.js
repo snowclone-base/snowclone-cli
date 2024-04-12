@@ -1,19 +1,11 @@
-import {
-  deployProject,
-  listProjects,
-  initializeAdmin,
-  uploadSchema,
-  removeProject,
-  removeProjects,
-  removeAdmin
-} from "../main.js";
-import { program } from "commander";
 import inquirer from "inquirer";
-import ora from "ora";
-import { createSpinner } from "../utils/ui.js"
-
-const COLORS = ["red", "green", "blue", "yellow", "magenta", "cyan", "white", "gray"];
-let randomIndex = Math.floor(Math.random() * COLORS.length);
+import Listr from "listr";
+import * as directories from "../utils/directories.js";
+import { terraformInit, configureWorkspace, terraformApplyAdmin } from "../utils/processes.js";
+import crypto from "crypto";
+import { createS3 } from "../utils/awsHelpers.js";
+import { getTfOutputs, saveInfoForProjects } from "../utils/localFileHelpers.js";
+import * as ui from "../utils/ui.js";
 
 export async function init(options) {
   const configs = {
@@ -36,11 +28,56 @@ export async function init(options) {
           })
         ).domain
   };
-  const spinner = createSpinner(
-    "Deploying to AWS... This may take up to 15 minutes!"
-  );
-  
-  spinner.start();
-  await initializeAdmin(configs)
-  spinner.succeed("Successfully deployed! You are ready to deploy projects.");
+
+  const s3BucketName = "snowclone-" + crypto.randomBytes(6).toString("hex");
+
+  const taskList = new Listr(
+    [
+      {
+        title: "Creating S3 bucket",
+        task: async (_, task) => {
+          await createS3(s3BucketName, configs.region);
+          task.title = "S3 bucket created!"
+        }
+      },
+      {
+        title: ui.dim("Initializing Terraform"),
+        task: async (_, task) => {
+          await terraformInit(s3BucketName, configs.region, directories.terraformAdminDir);
+          task.title = "Terraform initialized!"
+        }
+        
+      },
+      {
+        title: ui.dim("Configuring Terraform workspace"),
+        task: async (_, task) => {
+          await configureWorkspace("admin", directories.terraformAdminDir);
+          task.title = "Workspace configured!"
+        }
+      },
+      {
+        title: ui.dim("Provisioning admin infrastructure"),
+        task: async (_, task) => {
+          await terraformApplyAdmin(configs, directories.terraformAdminDir);
+          task.title = "Adming infrastructure provisioned!"
+        }
+      },
+      {
+        title: ui.dim("Save admin info locally"),
+        task: (_, task) => {
+          const tfOutputs = getTfOutputs(directories.terraformAdminDir);
+          saveInfoForProjects(
+            s3BucketName, 
+            configs.region, 
+            configs.domain, 
+            tfOutputs.subnetAid, 
+            tfOutputs.subnetBid, 
+            tfOutputs.route53ZoneId
+          );
+          task.title = "Admin info saved!";
+        }
+      }
+    ]
+  )
+  await taskList.run();
 }
