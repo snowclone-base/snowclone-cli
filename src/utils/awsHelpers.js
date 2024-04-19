@@ -79,7 +79,6 @@ export const addProjectToDynamo = async (projectName, backendEndpoint, region, a
 export const removeProjectFromDynamo = async (name, region) => {
   const dynamoDbClient = new DynamoDBClient({region: region });
   const project = await getProjectFromDynamo(name, region);
-  console.log(project)
 
   try {
     const command = new DeleteItemCommand({
@@ -90,7 +89,6 @@ export const removeProjectFromDynamo = async (name, region) => {
     });
 
     const data = await dynamoDbClient.send(command);
-    console.log('Item deleted successfully:', data);
 } catch (err) {
   console.error(err);
   }
@@ -103,7 +101,6 @@ export const dynamoDbExists = async (region) => {
     TableName: "backend_info"
   });
   await dynamoDbClient.send(describeTableCommand);
-  console.log(true)
   return true;
   } catch (error) {
     return false
@@ -117,8 +114,6 @@ export const emptyS3 = async (bucket, region) => {
   try {
     const listObjectsResponse = await client.send(new ListObjectsV2Command({ Bucket: bucket }));
     const objectsToDelete = listObjectsResponse.Contents.map(obj => ({ Key: obj.Key }));
-    console.log("listObjectsResponse: ", listObjectsResponse)
-    console.log("Objectstodelete: ", objectsToDelete);
     await client.send(new DeleteObjectsCommand({
       Bucket: bucket,
       Delete: { Objects: objectsToDelete },
@@ -135,8 +130,7 @@ export const removeS3 = async (bucket, region) => {
   });
 
   try {
-    const response = await client.send(command);
-    console.log(response);
+    await client.send(command);
   } catch (err) {
     console.error(err);
   }

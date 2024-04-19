@@ -77,22 +77,86 @@ export async function terraformApply(projectName,
   })
 }
 
-// export async function getProjectEndpoint() {
-//   return new Promise((resolve, reject) => {
-//       exec("terraform output -json", {
-//           cwd: directories.terraformAdminDir,
-//       }, (error, stdout, stderr) => {
-//           if (error) {
-//               reject(new Error(`Error executing terraform command: ${stderr}`));
-//           } else {
-//               try {
-//                   const tfOutputs = JSON.parse(stdout);
-//                   const projectEndpoint = tfOutputs.app_url.value;
-//                   resolve(projectEndpoint);
-//               } catch (parseError) {
-//                   reject(new Error(parseError.message));
-//               }
-//           }
-//       });
-//   });
-// }
+export async function terraformDestroy(projectName,
+                                       region,
+                                       directory, 
+                                       domainName,
+                                       subnetAid,
+                                       subnetBid,
+                                       pgUsername,
+                                       pgPassword,
+                                       jwtSecret,
+                                       apiToken,
+                                       route53ZoneId) {
+  return new Promise((resolve, reject) => {
+    exec(
+      `terraform destroy -auto-approve  -var="project_name=${projectName}" \
+       -var="domain_name=${domainName}" -var="region=${region}" \
+       -var="private_subnet_a_id=${subnetAid}" -var="private_subnet_b_id=${subnetBid}" \
+       -var="postgres_username=${pgUsername}" -var="postgres_password=${pgPassword}" \
+       -var="api_token=${apiToken}" -var="jwt_secret=${jwtSecret}" \
+       -var="aws_route53_zone_id=${route53ZoneId}"`,
+      { encoding: "utf-8", cwd: directory }, (error, stdout, stderr) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(stdout);
+        }
+      }
+    );
+  })
+}
+
+export async function terraformDestroyAdmin(region, domain, directory) {
+  return new Promise((resolve, reject) => {
+    exec(`terraform destroy -auto-approve \
+    -var="region=${region}" -var="domain_name=${domain}"`,
+    { cwd: directory}, (error, stdout, stderr) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve(stdout);
+      }
+    });
+  })
+}
+
+export async function addApiSchema(apiToken, projectName, domain) {
+  return new Promise((resolve, reject) => {
+    const command = `curl -H "Authorization: Bearer ${apiToken}" -o /dev/null -w "%{http_code}" \
+                    -F "file=@apiSchema.sql" https://${projectName}.${domain}/schema`;
+    const intervalId = setInterval(() => {
+      exec(command, { stdio: ['pipe', 'ignore', 'ignore'], encoding: "utf-8", cwd: directories.sqlDir },
+          (error, stdout, stderr) => {
+            if (error) {
+              clearInterval(intervalId);
+              reject(error);
+              return;
+            }
+          
+            const statusCode = parseInt(stdout.trim(), 10);
+            if (statusCode === 201) {
+              clearInterval(intervalId);
+              resolve(stdout);
+            }
+        }
+      );
+    }, 5000);
+  });
+}
+
+export async function uploadSchema(schemaFile, endpoint, apiToken) {
+  return new Promise((resolve, reject) => {
+    const command = `curl -H "Authorization: Bearer ${apiToken}" -o /dev/null -w "%{http_code}" \
+                    -F 'file=@${schemaFile}' https://${endpoint}/schema`
+    exec(command, { stdio: ['pipe', 'ignore', 'ignore'] }, (error, stdout, stderr) => {
+          if (error) {
+            reject(error);
+          } else {
+            const statusCode = parseInt(stdout.trim(), 10);
+            resolve(stdout);
+            return statusCode;
+          }
+        });
+  })
+}

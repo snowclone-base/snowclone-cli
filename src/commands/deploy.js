@@ -4,9 +4,12 @@ import Listr from "listr";
 import * as ui from "../utils/ui.js";
 import * as directories from "../utils/directories.js";
 import { getInfoForProjects } from "../utils/localFileHelpers.js";
-import { terraformInit, configureWorkspace, terraformApply } from "../utils/processes.js";
+import { terraformInit, configureWorkspace, terraformApply, addApiSchema } from "../utils/processes.js";
+import { generateHash } from "../utils/hashGenerator.js";
 
 export async function deploy(options) {
+  console.log(ui.purple("\n Welcome to..."))
+  console.log(ui.asciiBanner);
   const configs = {
     name:
       options.name ||
@@ -14,72 +17,28 @@ export async function deploy(options) {
         await inquirer.prompt({
           type: "input",
           name: "name",
-          message: "Specify the project name",
+          message: "Specify the project name:",
         })
       ).name,
-    pgUsername:
-        options.pgUsername ||
-        (
-          await inquirer.prompt({
-            type: "input",
-            name: "pgUsername",
-            message: "Specify a postgres password",
-          })
-        ).pgUsername,
-    pgPassword:
-        options.pgPassword ||
-        (
-          await inquirer.prompt({
-            type: "input",
-            name: "pgPassword",
-            message: "Specify a postgres username",
-          })
-        ).pgPassword,
-    jwtSecret:
-        options.jwtSecret ||
-          (
-            await inquirer.prompt({
-              type: "input",
-              name: "jwtSecret",
-              message: "Specify a JWT secret",
-            })
-          ).jwtSecret,
-    apiToken:
-        options.apiToken ||
-          (
-            await inquirer.prompt({
-              type: "input",
-              name: "apiToken",
-              message: "Specify an API token",
-            })
-          ).apiToken,
   };
 
-// add project to dynamo
-// add api schema
-  let infoForProject;
+  const { bucketName, region, domain, subnetAid, subnetBid, route53ZoneId } = getInfoForProjects();
+  const jwtSecret = generateHash(32);
+  const apiToken = generateHash(8);
 
   const taskList = new Listr(
     [
       {
-        title: "Fetching info for AWS resources",
+        title: "Initializing Terraform",
         task: async (_, task) => {
-          infoForProject = getInfoForProjects();
-          task.title = "Info for AWS resources fetched!"
-        }
-      },
-      {
-        title: ui.dim("Initializing Terraform"),
-        task: async (_, task) => {
-          await terraformInit(infoForProject.bucketName, infoForProject.region, directories.terraformAdminDir);
+          await terraformInit(bucketName, region, directories.terraformMainDir);
           task.title = "Terraform initialized!"
         }
-        
       },
       {
         title: ui.dim("Configuring Terraform workspace"),
         task: async (_, task) => {
-          await configureWorkspace(configs.name, directories.terraformAdminDir);
+          await configureWorkspace(configs.name, directories.terraformMainDir);
           task.title = "Workspace configured!"
         }
       },
@@ -88,35 +47,54 @@ export async function deploy(options) {
         title: ui.dim("Provisioning backend infrastructure"),
         task: async (_, task) => {
           await terraformApply(configs.name,
-                               infoForProject.region,
+                               region,
                                directories.terraformMainDir,
-                               infoForProject.domain,
-                               infoForProject.subnetAid,
-                               infoForProject.subnetBid,
-                               configs.pgUsername,
-                               configs.pgPassword,
-                               configs.jwtSecret,
-                               configs.apiToken,
-                               infoForProject.route53ZoneId
+                               domain,
+                               subnetAid,
+                               subnetBid,
+                               "pgUsername",
+                               "pgPassword",
+                               jwtSecret,
+                               apiToken,
+                               route53ZoneId
                                );
-          task.title = "Project infrastructure provisioned!"
+          task.title = "Backend infrastructure provisioned!"
         }
       },
       {
         title: ui.dim("Adding project info to DynamoDB"),
         task: async (_, task) => {
-          const projectEndpoint = `${configs.name}.${infoForProject.domain}`;
+          const projectEndpoint = `${configs.name}.${domain}`;
           await addProjectToDynamo(configs.name, 
                                    projectEndpoint, 
-                                   infoForProject.region, 
-                                   configs.apiToken,
-                                   configs.jwtSecret, 
-                                   configs.pgUsername, 
-                                   configs.pgPassword);
-          task.title = "Project info added to dynamo!";
+                                   region, 
+                                   apiToken,
+                                   jwtSecret, 
+                                   "pgUsername",
+                                   "pgPassword")
+          task.title = "Project info added to DynamoDB!";
         }
       },
+      {
+        title: ui.dim("Configuring APIs"),
+        task: async (_, task) => {
+
+          await addApiSchema(apiToken, configs.name, domain);
+          task.title = "APIs configured!"
+        }
+      }
     ]
   )
+
+  ui.waiting("Snowclone could take several minutes to finish deploying... ");
+
   await taskList.run();
+  ui.success(`Your project "${configs.name}" is deployed to AWS!`);
+  console.log("\n - Your API endpoint is: ", ui.green(`https://${configs.name}.${domain}`));
+  console.log(" - Your JWT secret is: ", ui.green(jwtSecret));
+  console.log(" - Your API token is: ", ui.green(apiToken));
+  console.log(" - Temporary Postgres Username: ",  ui.green("pgUsername"));
+  console.log(" - Temporary Postgres Password: ", ui.green("pgPassword"));
+  console.log(ui.green("\nPlease make sure to change Postgres credentials before using in production."));
+  console.log(ui.green("\nThese values can also be found in your DynamoDB."));
 }

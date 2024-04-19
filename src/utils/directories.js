@@ -8,4 +8,4 @@ export const homeDir = os.homedir();
 export const appDir = path.join(homeDir, "snowclone");
 export const terraformMainDir = path.join(__dirname, "../terraform/instance");
 export const terraformAdminDir = path.join(__dirname, "../terraform/admin");
-export const sqlDir = path.join(__dirname, "sql")
+export const sqlDir = path.join(__dirname, "../sql")

@@ -2,10 +2,10 @@ import inquirer from "inquirer";
 import Listr from "listr";
 import * as directories from "../utils/directories.js";
 import { terraformInit, configureWorkspace, terraformApplyAdmin } from "../utils/processes.js";
-import crypto from "crypto";
 import { createS3 } from "../utils/awsHelpers.js";
 import { getTfOutputs, saveInfoForProjects } from "../utils/localFileHelpers.js";
 import * as ui from "../utils/ui.js";
+import { nameS3 } from "../utils/hashGenerator.js";
 
 export async function init(options) {
   const configs = {
@@ -15,7 +15,7 @@ export async function init(options) {
         await inquirer.prompt({
           type: "input",
           name: "region",
-          message: "Specify your desired AWS region",
+          message: "Specify your desired AWS region:",
         })
       ).region,
     domain:
@@ -24,12 +24,12 @@ export async function init(options) {
           await inquirer.prompt({
             type: "input",
             name: "domain",
-            message: "Specify your domain name",
+            message: "Specify your domain name:",
           })
         ).domain
   };
 
-  const s3BucketName = "snowclone-" + crypto.randomBytes(6).toString("hex");
+  const s3BucketName = nameS3();
 
   const taskList = new Listr(
     [
@@ -79,5 +79,8 @@ export async function init(options) {
       }
     ]
   )
+
+  ui.waiting("Snowclone could take several minutes to finish initializing... ");
+
   await taskList.run();
 }
