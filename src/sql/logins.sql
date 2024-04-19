@@ -116,7 +116,7 @@ CREATE TYPE basic_auth.jwt_token AS (
   token text
 );
 
-ALTER DATABASE postgres SET "app.jwt_secret" TO 'O9fGlY0rDdDyW1SdCTaoqLmgQ2zZeCz6';
+ALTER DATABASE postgres SET "app.jwt_secret" TO 'a1087eddf68c8672ac41569dd1ba9d96';
 
 -- login should be on your exposed schema
 create or replace function
