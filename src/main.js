@@ -122,6 +122,7 @@ export async function initializeAdmin(configs) {
 
   const s3BucketName = "snowclone-" + crypto.randomBytes(6).toString("hex");
 
+
   await createS3(s3BucketName, configs.region);
   terraformInit(s3BucketName, configs.region, terraformAdminDir);
   configureWorkspace("admin", terraformAdminDir);
@@ -165,6 +166,7 @@ export async function uploadSchema(schemaFile, projectName) {
     const project = await getProjectFromDynamo(projectName, region);
     const { endpoint, apiToken } = project;
     const response = execSync(`curl -H "Authorization: Bearer ${apiToken}" -F 'file=@${schemaFile}' https://${endpoint}/schema`);
+
   } catch (err) {
     console.error(err);
   }
@@ -200,8 +202,9 @@ export async function removeAdmin() {
     -var="region=${region}" -var="domain_name=${domain}"`, { cwd: terraformAdminDir});
     await emptyS3(bucketName, region);
     await removeS3(bucketName, region)
+
   } catch (err) {
-    console.error(err)
+    console.error(err);
   }
 }
 
@@ -215,3 +218,4 @@ export async function removeProjects() {
     }));
   }
 }
+
