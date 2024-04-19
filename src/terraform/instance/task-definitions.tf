@@ -10,7 +10,7 @@ resource "aws_ecs_task_definition" "api" {
   container_definitions = jsonencode([
     {
       name  = "eventserver-container"
-      image = "snowclone/eventserver:3.0.1"
+      image = "snowclone/eventserver:3.0.3"
       portMappings = [
         {
           name          = "eventserver-port-8080"
