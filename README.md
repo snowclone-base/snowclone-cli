@@ -1,22 +1,17 @@
 # Snowclone CLI
 
-## Prerequisites
+## Before using Snowclone CLI, you must do the following:
 
-- Have [Terraform](https://developer.hashicorp.com/terraform/install) installed
-- Set your AWS credentials as environment variables from a terminal:
+- Install [Terraform](https://developer.hashicorp.com/terraform/install)
+- Install the [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+- Set [AWS credentials as environment variables from the terminal](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html)
+- Register a domain AWS route-53.
 
-```
-export AWS_ACCESS_KEY_ID=your_access_key_id
-export AWS_SECRET_ACCESS_KEY=your_secret_access_key
-```
 
 ## Installation
 
-To install the Snowclone CLI:
-
-- Clone this repository
-- Run `npm install`
-- Run `npm link` to establish a symlink (may need to run `sudo`)
+To install the Snowclone CLI, run the following command in the terminal: </br>
+`npm install -g snowclone-cli`
 
 ## Usage
 
@@ -27,10 +22,12 @@ Initialize your AWS with the necessary admin infrastructure. </br>
 ```
 FLAGS
   -r, --region: The AWS region
+  -d, --domain: Your route-53 registered domain
 
 EXAMPLE
-  snowclone init -r us-west-1
+  snowclone init -r us-west-1 -d myapp.com
 ```
+Snowclone will prompt users for these values if flags are not present. 
 
 ### `snowclone deploy`
 
@@ -39,16 +36,15 @@ Deploy a new backend stack to ECS Fargate. </br>
 ```
 FLAGS
   -n, --name: The name of the project
-  -r, --region: The AWS region
-  -d, --domain: The project's domain name
 
 EXAMPLE
-  snowclone deploy -n snowcones -r us-west-1 -d snowcones.com
+  snowclone deploy -n snowcones
 ```
+Snowclone will prompt users for a project name if the flag is not present. 
 
 ### `snowclone import`
 
-Import a sql file to a backend. </br>
+Import a specified sql file to a specified backend. </br>
 
 ```
 FLAGS
@@ -58,6 +54,7 @@ FLAGS
 EXAMPLE
   snowclone import -n snowcones -f snowconesSchema.sql
 ```
+Snowclone will prompt users for a project name if the flag is not present. 
 
 ### `snowclone list`
 
@@ -74,7 +71,8 @@ FLAGS
 EXAMPLE
   snowclone remove -n snowcones
 ```
+Snowclone will prompt users for a project name if the flag is not present. 
 
 ### `snowclone melt`
+Remove the admin infrastructure that was created with `snowclone init`. Note: this operation is irreversable. You will be prompted for confirmation before 'melt' proceeds. This action should only be done if all projects have been removed.
 
-Remove data for all active projects and tear down snowclone's admin infrastructure from AWS. Note: this operation is irreversable. You will be prompted for confirmation before `melt` commences.
