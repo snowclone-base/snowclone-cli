@@ -1,17 +1,3 @@
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
-
-provider "aws" {
-  region = "us-west-2"
-}
-
-
 resource "aws_dynamodb_table" "db" {
   name         = "backend_info"
   billing_mode = "PAY_PER_REQUEST"
@@ -24,6 +10,14 @@ resource "aws_dynamodb_table" "db" {
   table_class = "STANDARD_INFREQUENT_ACCESS"
 }
 
+output "private_subnet_a_id" {
+  value = aws_subnet.private_subnet_a.id
+}
+
+output "private_subnet_b_id" {
+  value = aws_subnet.private_subnet_b.id
+}
+
 terraform {
-    backend "s3" {}
+  backend "s3" {}
 }
