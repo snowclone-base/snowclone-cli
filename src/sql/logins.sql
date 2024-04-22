@@ -116,7 +116,6 @@ CREATE TYPE basic_auth.jwt_token AS (
   token text
 );
 
-ALTER DATABASE postgres SET "app.jwt_secret" TO 'a1087eddf68c8672ac41569dd1ba9d96';
 
 -- login should be on your exposed schema
 create or replace function
@@ -132,7 +131,7 @@ begin
   end if;
 
   select sign(
-    row_to_json(r), current_setting('app.jwt_secret')
+    row_to_json(r), '1048d0ce8cbab1252cfe29573cf3457e'
     ) as token
     from (
       select _role as role, login.email as email,
@@ -146,4 +145,4 @@ $$ language plpgsql security definer;
 grant execute on function api.login(text,text) to anon;
 
 insert into basic_auth.users (email, pass, role) values 
-  ('user@snowclone.com', 'snowclone', 'member');
+  ('user@snowclone.com', 'snowclone', 'webuser');

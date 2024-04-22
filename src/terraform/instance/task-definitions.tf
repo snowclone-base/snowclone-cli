@@ -10,7 +10,7 @@ resource "aws_ecs_task_definition" "api" {
   container_definitions = jsonencode([
     {
       name  = "eventserver-container"
-      image = "snowclone/eventserver:3.0.1"
+      image = "snowclone/eventserver:3.0.3"
       portMappings = [
         {
           name          = "eventserver-port-8080"
@@ -31,7 +31,7 @@ resource "aws_ecs_task_definition" "api" {
       environment = [
         { name = "PG_HOST", value = aws_db_instance.rds-db.address },
         { name = "PG_PORT", value = "5432" },
-        { name = "PG_DATABASE", value = "postgres" }
+        { name = "PG_DATABASE", value = "${var.project_name}_pg_db" }
       ]
       healthcheck = {
         command     = ["CMD-SHELL", "curl http://localhost:8080/ || exit 1"],
@@ -76,7 +76,7 @@ resource "aws_ecs_task_definition" "api" {
       environment = [
         { name = "PG_HOST", value = aws_db_instance.rds-db.address },
         { name = "PG_PORT", value = "5432" },
-        { name = "PG_DATABASE", value = "postgres" }
+        { name = "PG_DATABASE", value = "${var.project_name}_pg_db" }
       ]
       healthcheck = {
         command     = ["CMD-SHELL", "curl http://localhost:5175/V1/api || exit 1"],
@@ -124,7 +124,7 @@ resource "aws_ecs_task_definition" "postgrest" {
         }
       ]
       environment = [
-        { name = "PGRST_DB_URI", value = "postgres://authenticator:mysecretpassword@${aws_db_instance.rds-db.endpoint}/postgres" },
+        { name = "PGRST_DB_URI", value = "postgres://authenticator:mysecretpassword@${aws_db_instance.rds-db.endpoint}/${var.project_name}_pg_db" },
         { name = "PGRST_DB_SCHEMA", value = "api" },
         { name = "PGRST_DB_ANON_ROLE", value = "anon" },
         { name = "PGRST_OPENAPI_SERVER_PROXY_URI", value = "http://localhost:3000" },
