@@ -3,7 +3,6 @@ import { init } from "./commands/init.js";
 import { deploy } from "./commands/deploy.js";
 import { list } from "./commands/list.js";
 import { remove } from "./commands/remove.js";
-import { destroy } from "./commands/destroy.js"
 import { melt } from "./commands/melt.js";
 import { importSchema } from "./commands/import.js";
 
